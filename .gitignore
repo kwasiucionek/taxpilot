@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Środowisko wirtualne
+.venv/
+venv/
+env/
+
+# Sekrety / konfiguracja lokalna — NIE wypychamy .env!
+.env
+.env.*
+!.env.example
+local_settings.py
+
+# Django — pliki generowane / lokalne
+*.log
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# Narzędzia / cache
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

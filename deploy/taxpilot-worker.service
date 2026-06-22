@@ -1,0 +1,30 @@
+[Unit]
+Description=TaxPilot — Celery worker (ingest w tle)
+After=network.target redis.service postgresql.service docker.service
+Requires=redis.service
+
+# UWAGA: worker ładuje WŁASNĄ kopię stelli (~2 GB RAM). Na małym Mikrusie
+# rozważ pominięcie tej usługi i ingest przez `manage.py ingest_acts`
+# (synchronicznie, on-demand) zamiast trzymać worker stale w pamięci.
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/kwasiucionek/taxpilot
+
+ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/celery -A taxpilot_site worker \
+    --loglevel info \
+    --concurrency 1
+
+Restart=on-failure
+RestartSec=10s
+
+EnvironmentFile=/home/kwasiucionek/taxpilot/.env
+Environment="HF_HUB_DISABLE_IMPLICIT_TOKEN=1"
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=taxpilot-worker
+
+[Install]
+WantedBy=multi-user.target

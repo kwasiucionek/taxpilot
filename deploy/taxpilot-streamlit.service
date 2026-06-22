@@ -1,0 +1,37 @@
+[Unit]
+Description=TaxPilot — Streamlit (asystent ulg podatkowych)
+After=network.target docker.service
+Wants=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/kwasiucionek/taxpilot
+
+# Czekamy aż OpenSearch zwróci status >= yellow (max ~120 s).
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do curl -sf "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s" > /dev/null && exit 0; sleep 2; done; echo "OpenSearch nie wstal w 120 s" >&2; exit 1'
+
+# Streamlit na tym samym porcie co dawne uodo (8503) — nginx proxuje całość.
+ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/streamlit run app.py \
+    --server.port 8503 \
+    --server.address 127.0.0.1 \
+    --server.headless true \
+    --server.enableCORS false \
+    --server.enableXsrfProtection false \
+    --browser.gatherUsageStats false
+
+Restart=on-failure
+RestartSec=10s
+
+EnvironmentFile=/home/kwasiucionek/taxpilot/.env
+Environment="HF_HUB_DISABLE_IMPLICIT_TOKEN=1"
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=taxpilot
+
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

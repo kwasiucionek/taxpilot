@@ -1,0 +1,41 @@
+{% if error %}
+  <div class="errline" style="margin-top:18px">{{ error }}</div>
+{% else %}
+  <div class="assess">
+    {% for o in oceny %}
+    <article class="verdict {{ o.cls }}">
+      <header>
+        <h3>{{ o.ulga }}</h3>
+        <span class="vtag {{ o.cls }}">{{ o.werdykt }}</span>
+      </header>
+      {% if o.uzasadnienie %}<p>{{ o.uzasadnienie }}</p>{% endif %}
+      {% if o.podstawa_prawna %}
+        <div class="label">Podstawa prawna</div>
+        <ul class="basis">{% for b in o.podstawa_prawna %}<li>{{ b }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if o.czego_brakuje %}
+        <div class="label">Czego brakuje do oceny</div>
+        <ul>{% for c in o.czego_brakuje %}<li>{{ c }}</li>{% endfor %}</ul>
+      {% endif %}
+    </article>
+    {% empty %}
+      <div class="empty" style="margin-top:18px">Model nie zwrócił ocen.{% if zastrzezenie %} {{ zastrzezenie }}{% endif %}</div>
+    {% endfor %}
+  </div>
+
+  {% if sources %}
+  <div class="sources">
+    <h4>Przepisy użyte do oceny</h4>
+    {% for s in sources %}
+    <div class="src">
+      <span class="cit">{{ s.cit }} <span class="suf">{{ s.suf }}</span></span>
+      {% if s.ulga_label %}<span class="ulga {{ s.ulga_cls }}">{{ s.ulga_label }}</span>{% endif %}
+      <span class="grow"></span>
+      {% if s.url %}<a class="lnk" href="{{ s.url }}" target="_blank" rel="noopener">tekst ↗</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if zastrzezenie and oceny %}<p class="disclaimer">{{ zastrzezenie }}</p>{% endif %}
+{% endif %}

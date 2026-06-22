@@ -1,0 +1,85 @@
+# Warstwa danych TaxPilot: OpenSearch + PostgreSQL + Redis.
+# Aplikacja (gunicorn) działa na hoście i łączy się po 127.0.0.1.
+#
+# WAŻNE — reużywasz istniejącego OpenSearcha (kontener opensearch-uodo)?
+# Pomiń usługę `opensearch` (kolidowałaby na porcie 9200). Odpal tylko bazy:
+#     docker compose up -d postgres redis
+# Na świeżej maszynie bez OpenSearcha: docker compose up -d --build
+#
+# Zmienne POSTGRES_* muszą zgadzać się z .env aplikacji. Compose czyta je
+# z .env w katalogu deploy/ albo ze środowiska; domyślne = .env.example.
+#
+# OpenSearch — strojenie pod małą maszynę kontenerową:
+#   - node.store.allow_mmap=false → bez vm.max_map_count=262144 (LXC/OpenVZ)
+#   - heap 512m → podnieś do 1g, jeśli masz RAM
+#   - wyłączone progi dysku → chroni przed read-only na małym dysku
+
+services:
+  opensearch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taxpilot-opensearch
+    environment:
+      - cluster.name=taxpilot
+      - node.name=taxpilot-node
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - bootstrap.memory_lock=false
+      - node.store.allow_mmap=false
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    # Bez ulimitu memlock — na LXC nie da się ustawić nielimitowanego memlock
+    # (RLIMIT_MEMLOCK, "rlimit type 8"), a i tak mamy bootstrap.memory_lock=false.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - taxpilot-os-data:/usr/share/opensearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    container_name: taxpilot-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-taxpilot}
+      POSTGRES_USER: ${POSTGRES_USER:-taxpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taxpilot}
+    volumes:
+      - taxpilot-pg-data:/var/lib/postgresql/data
+    ports:
+      # tylko localhost — gunicorn na hoście łączy się po 127.0.0.1:5432
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taxpilot} -d ${POSTGRES_DB:-taxpilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: taxpilot-redis
+    # Broker Celery + cache — stan przejściowy, bez wolumenu (po restarcie
+    # niezakończone zadania puść ponownie przez `manage.py ingest_acts`).
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  taxpilot-os-data:
+  taxpilot-pg-data:

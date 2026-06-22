@@ -1,0 +1,38 @@
+[Unit]
+Description=TaxPilot — Django (gunicorn)
+After=network.target docker.service postgresql.service redis.service
+Wants=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/kwasiucionek/taxpilot
+
+# Czekamy aż OpenSearch zwróci status >= yellow (max ~120 s).
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do curl -sf "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s" > /dev/null && exit 0; sleep 2; done; echo "OpenSearch nie wstal w 120 s" >&2; exit 1'
+# Migracje + statyki (idempotentne).
+ExecStartPre=/home/kwasiucionek/taxpilot/.venv/bin/python manage.py migrate --noinput
+ExecStartPre=/home/kwasiucionek/taxpilot/.venv/bin/python manage.py collectstatic --noinput
+
+# gunicorn, workers=1 (embedder stella-pl-mini ładowany per-worker).
+ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/gunicorn taxpilot_site.wsgi:application \
+    --bind 127.0.0.1:8503 \
+    --workers 1 \
+    --timeout 120 \
+    --log-level info
+
+Restart=on-failure
+RestartSec=10s
+
+EnvironmentFile=/home/kwasiucionek/taxpilot/.env
+Environment="HF_HUB_DISABLE_IMPLICIT_TOKEN=1"
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=taxpilot
+
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

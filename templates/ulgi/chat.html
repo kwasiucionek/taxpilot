@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="modes" role="tablist">
+  <button id="tab-ask" role="tab" aria-selected="true" onclick="TaxPilot.mode('ask')">Pytanie</button>
+  <button id="tab-qual" role="tab" aria-selected="false" onclick="TaxPilot.mode('qual')">Kwalifikacja</button>
+</div>
+
+<!-- ── TRYB: PYTANIE (streaming RAG) ── -->
+<section id="panel-ask" class="panel active" role="tabpanel">
+  <div id="thread" class="thread" aria-live="polite">
+    <div class="empty" id="ask-empty">
+      <span class="big">Zapytaj o ulgę.</span>
+      np. „Jakie koszty są kwalifikowane w&nbsp;uldze B+R?" albo „Kiedy honorarium autorskie uprawnia do&nbsp;50% KUP?"
+    </div>
+  </div>
+
+  <div class="composer">
+    <textarea id="q" placeholder="Pytanie o ulgę podatkową…"
+              onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();TaxPilot.ask()}"></textarea>
+    <button class="btn" id="ask-btn" onclick="TaxPilot.ask()">Zapytaj</button>
+  </div>
+  <div class="hint">Filtr ulgi:
+    <label><input type="radio" name="ulga" value="" checked> wszystkie</label>
+    <label><input type="radio" name="ulga" value="BR"> B+R</label>
+    <label><input type="radio" name="ulga" value="IPBOX"> IP&nbsp;Box</label>
+    <label><input type="radio" name="ulga" value="PKUP"> 50%&nbsp;KUP</label>
+    &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> wysyła
+  </div>
+</section>
+
+<!-- ── TRYB: KWALIFIKACJA (HTMX) ── -->
+<section id="panel-qual" class="panel" role="tabpanel">
+  <form hx-post="{% url 'ulgi:qualify' %}" hx-target="#assess-result" hx-swap="innerHTML"
+        hx-indicator="#qual-ind" hx-disabled-elt="#qual-btn">
+    <div class="field">
+      <label class="hint" for="opis" style="display:block;margin:14px 0 6px">Opisz działalność (czym zajmuje się zespół / na czym polega praca):</label>
+      <textarea id="opis" name="opis" rows="5" required
+                placeholder="np. Zespół tworzy nowy silnik rekomendacji od podstaw — projektuje architekturę, prowadzi eksperymenty na modelach ML, dokumentuje wyniki…"></textarea>
+    </div>
+    <div class="hint" style="margin-top:10px">Rozpatrz ulgi:
+      <label><input type="checkbox" name="ulgi" value="BR" checked> B+R</label>
+      <label><input type="checkbox" name="ulgi" value="IPBOX" checked> IP&nbsp;Box</label>
+    </div>
+    <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+      <button class="btn" id="qual-btn" type="submit">Oceń kwalifikację</button>
+      <span id="qual-ind" class="htmx-indicator hint"><span class="spin"></span> analizuję przepisy…</span>
+    </div>
+  </form>
+
+  <div id="assess-result">
+    <div class="empty" style="margin-top:20px">
+      <span class="big">Ocena kwalifikacji do ulg.</span>
+      Opis trafia do wyszukiwarki przepisów i objaśnień; model ocenia przesłanki i wskazuje podstawę prawną oraz czego brakuje.
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>window.TAXPILOT_ASK_URL = "{% url 'ulgi:ask' %}";</script>
+<script src="{% static 'ulgi/app.js' %}"></script>
+{% endblock %}

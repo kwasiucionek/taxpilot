@@ -1,0 +1,23 @@
+# Web — Django + Celery + Redis + PostgreSQL (stack WILABS)
+Django>=5.0,<6.0
+celery>=5.3
+redis>=5.0
+psycopg[binary]>=3.1
+
+# OpenSearch — indeks wyszukiwania
+opensearch-py>=3.0.0
+
+# Embeddingi — sdadas/stella-pl-retrieval-mini-8k
+sentence-transformers>=3.0.0
+torch>=2.1.0
+
+# ELI API + parsowanie HTML aktów
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
+# Zmienne środowiskowe
+python-dotenv>=1.0.0
+
+# Opcjonalnie — szybkie demo Streamlit (app.py) zamiast Django
+# streamlit>=1.38.0
