@@ -7,18 +7,25 @@ RAG nad polskim prawem podatkowym, ukierunkowany na trzy ulgi:
 - **Koszty autorskie / 50% KUP** — art. 22 ust. 9 pkt 3 PIT
 
 Łączy przepisy, objaśnienia MF i interpretacje KIS, odpowiada z konkretną
-podstawą prawną i nie udaje wiążącej porady — wspiera doradcę.
+podstawą prawną (z cytatem do artykułu i rozwijanym fragmentem źródła) i nie
+udaje wiążącej porady — wspiera doradcę.
 
 ## Architektura
 
 | Warstwa | Rola |
 |---------|------|
 | **PostgreSQL** | system of record (akty, chunki, zadania ingestu, historia) |
-| **OpenSearch** | indeks wyszukiwania — hybryda BM25 (Stempel) + kNN |
-| **Celery + Redis** | ingest w tle (ELI → chunking → embeddingi → bazy) |
-| **stella-pl-mini** | embedder (`sdadas/stella-pl-retrieval-mini-8k`) |
-| **Ollama** | generacja odpowiedzi (`deepseek-v4-flash:cloud`) |
-| **Django + HTMX** | aplikacja webowa (czat + asystent kwalifikacji) |
+| **OpenSearch** | indeks wyszukiwania — hybryda BM25 (Stempel) + kNN, pipeline RRF |
+| **Redis** | broker Celery **oraz** semantyczny cache odpowiedzi (exact + kosinus) |
+| **Celery** | ingest w tle (ELI → chunking → embeddingi → bazy) |
+| **stella-pl-mini** | embedder (`sdadas/stella-pl-retrieval-mini-8k`, dim 1024) |
+| **Ollama** | generacja odpowiedzi (`deepseek-v4-flash:cloud`), streaming po SSE |
+| **Django + HTMX** | aplikacja webowa (czat ze streamingiem + asystent kwalifikacji) |
+
+Korpus **ustaw aktualizuje się sam**: resolver ELI pobiera najnowszy tekst
+jednolity i wykrywa nowelizacje uchwalone po jego publikacji (ostrzeżenie o
+stanie prawnym). Objaśnienia MF i interpretacje KIS dochodzą jako pseudo-akty,
+bez zmiany schematu.
 
 Rdzeń RAG jest frameworkowo-niezależny; Django go owija. Dostępne też
 szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
@@ -30,11 +37,12 @@ szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
 
 | plik | rola |
 |------|------|
-| `config.py` | konfiguracja, rejestr aktów (ELI), mapa ulg→artykuły |
-| `eli_client.py` | pobieranie tekstów aktów z `api.sejm.gov.pl/eli` |
-| `chunking.py` | podział aktu na jednostki redakcyjne (artykuł/ustęp) |
-| `opensearch_schema.py` | mapping (Stempel + kNN + daty), pipeline hybrydy, zapytania |
-| `embedder.py` | stella-pl-mini (patch CPU), embed query/dokument |
+| `config.py` | konfiguracja, rejestr aktów (ELI), mapa ulg→artykuły, źródła MF, węzły przepisów EUREKA |
+| `eli_client.py` | pobieranie tekstów aktów z `api.sejm.gov.pl/eli`, ekstrakcja PDF/HTML |
+| `discovery.py` | resolver ELI: wybór najnowszego tekstu jednolitego, wykrywanie nowelizacji po t.j. |
+| `chunking.py` | podział aktu na jednostki redakcyjne (artykuł/ustęp) + chunkowanie prozy (objaśnienia/interpretacje), twardy podział długich fragmentów |
+| `opensearch_schema.py` | mapping (Stempel/morfologik + kNN + daty), pipeline hybrydy RRF, zapytania |
+| `embedder.py` | stella-pl-mini (GPU/CPU, atencja PyTorch zamiast xformers), embed query/dokument |
 | `search.py` | hybryda z filtrami (ulga, akt, stan prawny) + generacja |
 | `qualification.py` | asystent kwalifikacji (B+R / IP Box) |
 | `ingest.py` | core CLI ingestu (tylko OpenSearch) |
@@ -46,16 +54,23 @@ szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
 |---------|------|
 | `taxpilot_site/` | projekt (settings, celery, urls, wsgi/asgi) |
 | `ulgi/models.py` | Akt, Chunk, IngestJob, QualificationQuery, Chat* |
-| `ulgi/ingest_core.py` | ingest do Postgres + OpenSearch |
+| `ulgi/views.py` | widoki: czat (SSE), kwalifikacja (HTMX), widok źródeł |
+| `ulgi/services.py` | warstwa usług (answer/qualify) spinająca search + cache |
+| `ulgi/cache.py` | semantyczny cache odpowiedzi na Redisie (exact + kosinus ≥ 0.95) |
+| `ulgi/ingest_core.py` | ingest aktów ELI do Postgres + OpenSearch |
+| `ulgi/ingest_docs.py` | ingest objaśnień MF i interpretacji KIS (pseudo-akty) |
+| `ulgi/kis_client.py` | klient publicznego API EUREKA (wyszukiwanie + pobieranie interpretacji) |
 | `ulgi/tasks.py` | zadanie Celery `ingest_act_task` |
-| `ulgi/management/commands/ingest_acts.py` | ingest bez Celery |
+| `ulgi/management/commands/ingest_acts.py` | ingest ustaw (ELI) |
+| `ulgi/management/commands/ingest_objasnienia.py` | ingest objaśnień MF (PDF) |
+| `ulgi/management/commands/ingest_interpretacje.py` | ingest interpretacji KIS (EUREKA) |
 | `app.py` | alternatywne demo w Streamlit |
 
 ## Wymagania infrastruktury
 
 - **OpenSearch** z pluginem `analysis-stempel` (patrz `deploy/`)
 - **PostgreSQL** 14+
-- **Redis** (broker Celery)
+- **Redis** (broker Celery + cache)
 - **Ollama** z kluczem cloud (generacja)
 
 ## Konfiguracja
@@ -76,9 +91,16 @@ pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser
 
-# Ingest aktów (synchronicznie, bez Celery — oszczędność RAM):
+# Ingest ustaw (synchronicznie, bez Celery — oszczędność RAM):
 python manage.py ingest_acts --all --od 2024-01-01
 # ...albo przez Celery:  python manage.py ingest_acts --act CIT --async
+
+# Objaśnienia MF (kuratorska lista PDF):
+python manage.py ingest_objasnienia --all
+
+# Interpretacje KIS z EUREKA (ulga sama dobiera przepisy):
+python manage.py ingest_interpretacje --ulga IPBOX --limit 50 --od-daty 2023-01-01
+# ...podgląd bez indeksowania:  --dry-run
 
 python manage.py runserver           # dev
 # produkcyjnie: gunicorn taxpilot_site.wsgi  (patrz deploy/)
@@ -100,8 +122,10 @@ streamlit run app.py --server.port 8503
 ## Strategia ingestu (oszczędność RAM)
 
 Embeddingi licz lokalnie (RTX 5090) i wgrywaj do zdalnego OpenSearcha
-tunelem SSH, albo odpalaj `manage.py ingest_acts` on-demand zamiast
-trzymać always-on worker Celery (druga kopia stelli w RAM).
+tunelem SSH, albo odpalaj `manage.py ingest_*` on-demand zamiast
+trzymać always-on worker Celery (druga kopia stelli w RAM). Pełny ingest na
+GPU schodzi z godzin (CPU na VPS) do minut; ingest jest idempotentny
+(`_id = doc_id`), więc można go bezpiecznie ponawiać.
 
 ## Wdrożenie
 
@@ -110,8 +134,12 @@ Patrz `deploy/README-mikrus.md` — pełny stack na Mikrusie
 
 ## TODO
 
-- [ ] W `config.ACTS` podmienić `position` na aktualny **tekst jednolity** CIT/PIT/Ordynacji.
-- [ ] Widoki HTMX: czat ze streamingiem (SSE) + tryb kwalifikacji *(w toku)*.
-- [ ] Ingest interpretacji KIS (eureka.mf.gov.pl) i objaśnień MF.
 - [ ] Orzecznictwo NSA (CBOSA).
 - [ ] Wersjonowanie czasowe (wiele wersji artykułu z rozłącznymi przedziałami dat).
+
+### Zrealizowane
+
+- [x] Resolver ELI: automatyczny najnowszy tekst jednolity + wykrywanie nowelizacji po t.j. (badge stanu prawnego).
+- [x] Widoki HTMX: czat ze streamingiem (SSE) + tryb kwalifikacji.
+- [x] Ingest interpretacji KIS (eureka.mf.gov.pl — wyszukiwanie po przepisie) i objaśnień MF.
+- [x] Hybryda BM25 + kNN (pipeline RRF), semantyczny cache na Redisie, fragmenty źródeł z bazy.

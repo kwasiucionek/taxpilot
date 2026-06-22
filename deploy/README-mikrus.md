@@ -45,17 +45,45 @@ python manage.py migrate
 python manage.py createsuperuser
 ```
 
-## 3. Ingest
+> **Uwaga (tunel):** jeśli ingest robisz z lokalnej maszyny przez tunel SSH
+> (sekcja 3), w `.env` kieruj usługi na `127.0.0.1`, **nie** `localhost` —
+> `localhost` potrafi rozwiązać się na IPv6 (`::1`), a tunel binduje IPv4:
+> `OPENSEARCH_URL=http://127.0.0.1:9200`, host Postgresa `127.0.0.1:5432`.
+
+## 3. Ingest (trzy źródła)
 
 Embeddingi liczone na CPU Mikrusa są wolne — najlepiej z lokalnej maszyny
-(RTX 5090) tunelem SSH do OpenSearcha **i** Postgresa Mikrusa:
+(RTX 5090) tunelem SSH do OpenSearcha **i** Postgresa Mikrusa.
+
+Mikrus używa **niestandardowego portu SSH** (sprawdź w panelu, np. `10141`):
 
 ```bash
-ssh -N -L 9200:127.0.0.1:9200 -L 5432:127.0.0.1:5432 user@pro01.mikr.us &
-python manage.py ingest_acts --all --od 2024-01-01
+ssh -N -o ServerAliveInterval=30 -p <PORT_SSH> \
+    -L 9200:127.0.0.1:9200 \
+    -L 5432:127.0.0.1:5432 \
+    root@<serwer>.mikrus.xyz &
 ```
 
-Albo bezpośrednio na VPS (wolniej): to samo polecenie bez tunelu.
+Na GPU możesz podbić batch embeddera (`EMBED_BATCH_SIZE=64` w środowisku).
+Następnie zaindeksuj wszystkie trzy źródła:
+
+```bash
+# 1) Ustawy (ELI — resolver bierze najnowszy tekst jednolity):
+python manage.py ingest_acts --all --od 2024-01-01
+
+# 2) Objaśnienia MF (kuratorska lista PDF):
+python manage.py ingest_objasnienia --all
+
+# 3) Interpretacje KIS z EUREKA (ulga sama dobiera przepisy):
+python manage.py ingest_interpretacje --ulga BR    --limit 50 --od-daty 2023-01-01
+python manage.py ingest_interpretacje --ulga IPBOX --limit 50 --od-daty 2023-01-01
+python manage.py ingest_interpretacje --ulga PKUP  --limit 50 --od-daty 2023-01-01
+```
+
+Ingest jest idempotentny (`_id = doc_id`), więc można go bezpiecznie ponawiać —
+jeśli tunel padnie w połowie, po prostu odpal ponownie.
+
+Albo bezpośrednio na VPS (wolniej): te same polecenia bez tunelu.
 > `ingest_acts` jest synchroniczny — NIE wymaga always-on workera Celery.
 
 ## 4. Usługi systemd
@@ -70,7 +98,9 @@ cp deploy/taxpilot-worker.service /etc/systemd/system/
 systemctl enable --now taxpilot-worker
 ```
 
-`taxpilot.service` sam robi `migrate` + `collectstatic` przy starcie.
+`taxpilot.service` sam robi `migrate` + `collectstatic` przy starcie, więc po
+zmianach w plikach statycznych (np. `app.js`) wystarczy `systemctl restart
+taxpilot`. Jeśli statyki idą przez Cloudflare, dodatkowo wyczyść cache CDN.
 
 ## 5. nginx
 
