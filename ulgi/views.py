@@ -62,6 +62,7 @@ def _source_view(d: dict) -> dict:
         "ulga_cls": ULGA_CLS.get(ulga, ""),
         "ulga_label": ULGA_LABELS.get(ulga, ""),
         "url": d.get("zrodlo_url") or _eli_gov_url(d.get("eli_id", "")),
+        "text": (d.get("content_text") or "").strip(),
     }
 
 

@@ -10,9 +10,9 @@
 <!-- ── TRYB: PYTANIE (streaming RAG) ── -->
 <section id="panel-ask" class="panel active" role="tabpanel">
   <div id="thread" class="thread" aria-live="polite">
-    <div class="empty" id="ask-empty">
+    <div class="empty intro" id="ask-empty">
       <span class="big">Zapytaj o ulgę.</span>
-      np. „Jakie koszty są kwalifikowane w&nbsp;uldze B+R?" albo „Kiedy honorarium autorskie uprawnia do&nbsp;50% KUP?"
+      <span class="lede">Odpowiedź z&nbsp;przepisów, objaśnień&nbsp;MF i&nbsp;interpretacji&nbsp;KIS — z&nbsp;cytatem do&nbsp;źródła.</span>
     </div>
   </div>
 
@@ -20,6 +20,29 @@
     <textarea id="q" placeholder="Pytanie o ulgę podatkową…"
               onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();TaxPilot.ask()}"></textarea>
     <button class="btn" id="ask-btn" onclick="TaxPilot.ask()">Zapytaj</button>
+  </div>
+  <div class="examples-bar">
+    <span class="ex-label">Przykłady</span>
+    <div class="examples">
+      <button type="button" class="chip" data-ulga="BR" onclick="TaxPilot.example(this)">
+        <span class="ulga br">B+R</span><span class="q">Jakie koszty są kwalifikowane w uldze B+R?</span>
+      </button>
+      <button type="button" class="chip" data-ulga="BR" onclick="TaxPilot.example(this)">
+        <span class="ulga br">B+R</span><span class="q">Czy wynagrodzenia i składki ZUS to koszty kwalifikowane?</span>
+      </button>
+      <button type="button" class="chip" data-ulga="IPBOX" onclick="TaxPilot.example(this)">
+        <span class="ulga ipbox">IP Box</span><span class="q">Jak obliczyć wskaźnik nexus?</span>
+      </button>
+      <button type="button" class="chip" data-ulga="IPBOX" onclick="TaxPilot.example(this)">
+        <span class="ulga ipbox">IP Box</span><span class="q">Czy dochód ze sprzedaży autorskiego programu korzysta z 5% stawki?</span>
+      </button>
+      <button type="button" class="chip" data-ulga="PKUP" onclick="TaxPilot.example(this)">
+        <span class="ulga pkup">50% KUP</span><span class="q">Czy programiście przysługują 50% koszty autorskie?</span>
+      </button>
+      <button type="button" class="chip" data-ulga="PKUP" onclick="TaxPilot.example(this)">
+        <span class="ulga pkup">50% KUP</span><span class="q">Jak wyodrębnić honorarium autorskie w umowie o pracę?</span>
+      </button>
+    </div>
   </div>
   <div class="hint">Filtr ulgi:
     <label><input type="radio" name="ulga" value="" checked> wszystkie</label>
@@ -60,5 +83,5 @@
 
 {% block scripts %}
 <script>window.TAXPILOT_ASK_URL = "{% url 'ulgi:ask' %}";</script>
-<script src="{% static 'ulgi/app.js' %}"></script>
+<script src="{% static 'ulgi/app.js' %}?v=2"></script>
 {% endblock %}

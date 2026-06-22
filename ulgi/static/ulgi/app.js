@@ -40,13 +40,29 @@ const TaxPilot = (() => {
     const box = el("div", "sources");
     box.appendChild(el("h4", null, "Źródła"));
     items.forEach((s) => {
+      const item = el("div", "src-item");
       const row = el("div", "src");
       row.innerHTML =
         `<span class="cit">${esc(s.cit)} <span class="suf">${esc(s.suf || "")}</span></span>` +
         ulgaTag(s) +
         `<span class="grow"></span>` +
-        (s.url ? `<a class="lnk" href="${esc(s.url)}" target="_blank" rel="noopener">tekst ↗</a>` : "");
-      box.appendChild(row);
+        (s.text ? `<button type="button" class="frag-t" aria-expanded="false">fragment ▾</button>` : "") +
+        (s.url ? `<a class="lnk" href="${esc(s.url)}" target="_blank" rel="noopener">pełny tekst ↗</a>` : "");
+      item.appendChild(row);
+      if (s.text) {
+        const frag = el("div", "frag");
+        frag.innerHTML = esc(s.text).replace(/\n+/g, "<br>");
+        frag.hidden = true;
+        item.appendChild(frag);
+        const btn = row.querySelector(".frag-t");
+        btn.addEventListener("click", () => {
+          const open = frag.hidden;
+          frag.hidden = !open;
+          btn.setAttribute("aria-expanded", String(open));
+          btn.textContent = open ? "fragment ▴" : "fragment ▾";
+        });
+      }
+      box.appendChild(item);
     });
     turn.appendChild(box);
   }
@@ -142,5 +158,17 @@ const TaxPilot = (() => {
     $("ask-btn").disabled = false;
   }
 
-  return { mode, ask };
+  function example(btn) {
+    const q = btn.querySelector(".q");
+    if (!q) return;
+    $("q").value = q.textContent.trim();
+    const u = btn.getAttribute("data-ulga");
+    if (u !== null) {
+      const r = document.querySelector('input[name=ulga][value="' + u + '"]');
+      if (r) r.checked = true;
+    }
+    ask();
+  }
+
+  return { mode, ask, example };
 })();

@@ -138,7 +138,14 @@ def assess(
     return {
         "ocena": ocena,
         "sources": [
-            {"citation": d.get("citation"), "ulga": d.get("ulga"), "score": d.get("_score")}
+            {
+                "citation": d.get("citation"),
+                "ulga": d.get("ulga"),
+                "eli_id": d.get("eli_id", ""),
+                "zrodlo_url": d.get("zrodlo_url", ""),
+                "content_text": d.get("content_text", ""),
+                "score": d.get("_score"),
+            }
             for d in docs
         ],
     }

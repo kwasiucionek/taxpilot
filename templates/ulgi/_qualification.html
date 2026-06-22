@@ -27,11 +27,19 @@
   <div class="sources">
     <h4>Przepisy użyte do oceny</h4>
     {% for s in sources %}
-    <div class="src">
-      <span class="cit">{{ s.cit }} <span class="suf">{{ s.suf }}</span></span>
-      {% if s.ulga_label %}<span class="ulga {{ s.ulga_cls }}">{{ s.ulga_label }}</span>{% endif %}
-      <span class="grow"></span>
-      {% if s.url %}<a class="lnk" href="{{ s.url }}" target="_blank" rel="noopener">tekst ↗</a>{% endif %}
+    <div class="src-item">
+      <div class="src">
+        <span class="cit">{{ s.cit }} <span class="suf">{{ s.suf }}</span></span>
+        {% if s.ulga_label %}<span class="ulga {{ s.ulga_cls }}">{{ s.ulga_label }}</span>{% endif %}
+        <span class="grow"></span>
+        {% if s.url %}<a class="lnk" href="{{ s.url }}" target="_blank" rel="noopener">pełny tekst ↗</a>{% endif %}
+      </div>
+      {% if s.text %}
+      <details class="frag-d">
+        <summary>fragment</summary>
+        <div class="frag">{{ s.text|linebreaksbr }}</div>
+      </details>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
