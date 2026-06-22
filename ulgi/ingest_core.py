@@ -106,7 +106,10 @@ def ingest_act_to_stores(kod: str, obowiazuje_od: str | None = None, task_id: st
         ok, errors = bulk(client, actions, raise_on_error=False)
         client.indices.refresh(index=OPENSEARCH_INDEX)
 
+        _nowele = meta.get("_nowele_po_tj", [])
         akt.last_ingested_at = timezone.now()
+        akt.nowele_po_tj = len(_nowele)
+        akt.nowele = _nowele
         akt.save()
 
         job.status = "success"
@@ -117,6 +120,7 @@ def ingest_act_to_stores(kod: str, obowiazuje_od: str | None = None, task_id: st
             "akt": kod,
             "eli": eid,
             "stan_prawny": eff,
+            "nowele_po_tj": len(meta.get("_nowele_po_tj", [])),
             "ok": ok,
             "errors": len(errors),
         }

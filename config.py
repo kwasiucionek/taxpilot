@@ -103,6 +103,51 @@ SOURCE_INTERPRETACJA = "interpretacja"
 SOURCE_OBJASNIENIA = "objasnienia"
 SOURCE_ORZECZENIE = "orzeczenie"
 
+# ── Objaśnienia podatkowe MF (kuratorska lista PDF z gov.pl) ──────
+# Proza (nie akty ELI) — chunkowane przez chunking.chunk_document, source_type
+# = SOURCE_OBJASNIENIA. `kod` ≤16 znaków (trafia do article_num jako dyskryminator
+# doc_id, niewyświetlany). Link do PDF wędruje do wyników jako `zrodlo_url`.
+# Objaśnienia IP Box 2019 omawiają też szczegółowo kryteria B+R (twórczość,
+# systematyczność), więc zasilają oba tematy.
+OBJASNIENIA: dict[str, dict] = {
+    "OBJ-IPBOX-2019": {
+        "title": "Objaśnienia podatkowe MF z 15.07.2019 — IP Box",
+        "data": "2019-07-15",
+        "ulga": "IPBOX",
+        "citation": "Objaśnienia MF z 15.07.2019 (IP Box)",
+        # Stary link /media/5137/ na podatki.gov.pl wygasł (404). Bezpośredni
+        # załącznik gov.pl z pełną treścią; gdyby kiedyś też padł, świeży URL
+        # bierzemy ze strony: gov.pl/web/finanse → objaśnienia IP Box.
+        "url": "https://www.gov.pl/attachment/8b23d192-0777-4e1a-8fb3-355f797a1200",
+    },
+    "OBJ-PKUP-2020": {
+        "title": "Interpretacja ogólna MF z 15.09.2020 — 50% KUP (honorarium autorskie)",
+        "data": "2020-09-15",
+        "ulga": "PKUP",
+        "citation": "Interpretacja ogólna MF z 15.09.2020 (50% KUP)",
+        "url": "https://www.mf.gov.pl/documents/764034/6831363/Dz.+Urz.+Min.+Fin.+z+dnia+18+wrze%C5%9Bnia+2020+r.+-+poz.+107+-",
+    },
+    # B+R: MF nie wydało dedykowanych objaśnień ulgi B+R — kryteria działalności
+    # B+R (twórczość, systematyczność, zwiększanie zasobów wiedzy) są szczegółowo
+    # omówione w objaśnieniach IP Box powyżej, więc temat jest już pokryty.
+}
+
+# ── EUREKA / KIS — wyszukiwanie interpretacji indywidualnych ─────
+# Kody filtrów serwerowych wyszukiwarki EUREKA (POST wyszukiwarka/informacje):
+KIS_KATEGORIA_INTERPRETACJA_ID = 1   # KATEGORIA_INFORMACJI: „Interpretacja indywidualna"
+KIS_STATUS_AKTUALNA_ID = 27          # STATUS_INFORMACJI: „Aktualna"
+
+# Mapa: ulga → ID węzłów przepisów (słownik PRZEPISY, sid=19) dla naszych kotwic.
+# Pozwala `ingest_interpretacje --ulga IPBOX` samodzielnie dobrać artykuły.
+# PKUP celuje w art. 22 ust. 9 pkt 3 PIT (węzeł 35893) — wprost przepis o 50%
+# kosztach z praw autorskich, a nie całe (szerokie) art. 22. Do poszerzenia o
+# katalog działalności twórczych można dołożyć 35900 (art. 22 ust. 9b).
+PRZEPISY_BY_ULGA: dict[str, list[int]] = {
+    "BR":    [35573, 40951],                # art. 18d CIT, art. 26e PIT
+    "IPBOX": [36247, 36274, 41618, 41633],  # art. 24d/24e CIT, art. 30ca/30cb PIT
+    "PKUP":  [35893],                       # art. 22 ust. 9 pkt 3 PIT (50% KUP)
+}
+
 # ── Wyszukiwanie ─────────────────────────────────────────────────
 TOP_K = 8
 CHUNK_MAX_CHARS = 1200  # powyżej tej długości artykuł dzielony po ustępach

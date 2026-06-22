@@ -31,6 +31,9 @@ class Akt(models.Model):
     citation_suffix = models.CharField(max_length=128)
     eli_id = models.CharField(max_length=64, blank=True)
     last_ingested_at = models.DateTimeField(null=True, blank=True)
+    # Nowelizacje uchwalone po tekście jednolitym (sygnał aktualności stanu prawnego).
+    nowele_po_tj = models.IntegerField(default=0)
+    nowele = models.JSONField(default=list, blank=True)  # [{eli,date,title}] — newest first
 
     class Meta:
         ordering = ["kod"]

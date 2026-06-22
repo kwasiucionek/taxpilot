@@ -18,8 +18,8 @@ _QUERY_PREFIX = (
 _loaded_embedder = None
 
 
-def _disable_xformers_cpu(model) -> int:
-    """Wyłącza xformers w warstwach uwagi przy pracy na CPU.
+def _disable_xformers(model) -> int:
+    """Wyłącza xformers w warstwach uwagi (CPU lub niezgodny build xformers na GPU).
 
     stella-mini (oparta na stella_en_400M_v5) wywołuje bezpośrednio
     xformers.memory_efficient_attention (wymaga CUDA). Trzy kroki:
@@ -76,11 +76,15 @@ def get_embedder():
     # Chunki (ustęp/artykuł, ~1200 znaków) mieszczą się; tnie tylko skrajnie długie.
     model.max_seq_length = EMBED_MAX_SEQ
 
-    if device == "cpu":
-        n = _disable_xformers_cpu(model)
-        if n:
-            print(f"  CPU: wyłączono xformers w {n} warstwach uwagi.")
-    else:
+    # stella-mini woła wprost xformers.ops.fmha.memory_efficient_attention.
+    # Na CPU xformers nie istnieje; na nowych GPU (np. Blackwell/sm_120) wheel
+    # bywa niezgodny z torch/CUDA i xformers.ops == None → "'NoneType' object
+    # has no attribute 'fmha'". Dlatego ZAWSZE wymuszamy standardową atencję.
+    n = _disable_xformers(model)
+    if n:
+        print(f"  Wyłączono xformers w {n} warstwach uwagi (atencja PyTorch).")
+
+    if device == "cuda":
         try:
             model = model.half()
         except Exception:

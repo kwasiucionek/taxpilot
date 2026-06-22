@@ -7,6 +7,12 @@ ustępów) dzielimy po USTĘPACH, zachowując nagłówek artykułu w treści
 chunka — embedding ma wtedy kontekst, a cytat jest precyzyjny
 („art. 18d ust. 2 ustawy o CIT").
 
+Segmenty dłuższe niż CHUNK_MAX_CHARS (np. art. 16 z rozbudowaną listą,
+albo pojedynczy długi ustęp) są dodatkowo cięte na części po granicach
+naturalnych — linie → zdania → w ostateczności twardo po znakach. Dzięki
+temu żaden chunk nie przekracza limitu długości embeddera i nic nie jest
+obcinane przy indeksacji.
+
 Każdy chunk niesie metadane: akt, numer artykułu, ustęp, znacznik ulgi,
 typ źródła oraz gotowy łańcuch cytatu.
 """
@@ -30,6 +36,9 @@ _RE_ARTICLE = re.compile(r"(?m)^\s*Art\.\s*(\d+[a-z]*)\.\s*")
 # Początek ustępu wewnątrz artykułu: linia zaczynająca się od "1. ", "2. " ...
 # (z separatorem, żeby nie łapać "1)" punktów ani dat).
 _RE_USTEP = re.compile(r"(?m)^\s*(\d+)\.\s+")
+
+# Granica zdania/jednostki przy cięciu długich segmentów (po kropce/średniku/dwukropku).
+_RE_SENTENCE = re.compile(r"(?<=[.;:])\s+")
 
 
 @dataclass
@@ -113,6 +122,51 @@ def _split_ustepy(article_body: str) -> list[tuple[str, str]]:
     return out
 
 
+def _atomize(text: str, max_chars: int) -> list[str]:
+    """Rozbija tekst na najmniejsze sensowne jednostki ≤ max_chars.
+
+    Kolejność degradacji: całe linie → zdania (po kropce/średniku) →
+    twarde cięcie po znakach (ostateczność dla jednego monstrualnego ciągu).
+    """
+    step = max(1, max_chars)
+    units: list[str] = []
+    for line in text.split("\n"):
+        line = line.rstrip()
+        if not line.strip():
+            continue
+        if len(line) <= max_chars:
+            units.append(line)
+            continue
+        for sent in _RE_SENTENCE.split(line):
+            if not sent.strip():
+                continue
+            if len(sent) <= max_chars:
+                units.append(sent)
+            else:
+                for i in range(0, len(sent), step):
+                    units.append(sent[i : i + step])
+    return units
+
+
+def _split_long(text: str, max_chars: int) -> list[str]:
+    """Tnie długi tekst na części ≤ max_chars, pakując jednostki zachłannie."""
+    if len(text) <= max_chars:
+        return [text]
+    out: list[str] = []
+    cur = ""
+    for unit in _atomize(text, max_chars):
+        cand = unit if not cur else f"{cur}\n{unit}"
+        if len(cand) <= max_chars:
+            cur = cand
+        else:
+            if cur:
+                out.append(cur)
+            cur = unit
+    if cur:
+        out.append(cur)
+    return out
+
+
 def chunk_act(
     text: str,
     *,
@@ -126,12 +180,14 @@ def chunk_act(
     chunks: list[Chunk] = []
     for article_num, body in _split_articles(text):
         ulga = _detect_ulga(akt_short, article_num)
+        art_cite = f"art. {article_num} {citation_suffix}"
 
+        # Krótki artykuł — jeden chunk (bez zmian).
         if len(body) <= max_chars:
             chunks.append(
                 Chunk(
                     content_text=body,
-                    citation=f"art. {article_num} {citation_suffix}",
+                    citation=art_cite,
                     akt=akt_short,
                     article_num=article_num,
                     ustep="",
@@ -142,43 +198,91 @@ def chunk_act(
             )
             continue
 
-        # Artykuł długi — dzielimy po ustępach.
         ustepy = _split_ustepy(body)
+
+        # Długi artykuł bez numeracji ustępów — tniemy treść na części.
+        # Pierwsza część zawiera nagłówek 'Art. N.' inline; kolejne dostają
+        # tag kontekstowy, żeby embedding wiedział, do czego należą.
         if len(ustepy) == 1:
-            # brak numeracji ustępów mimo długości — zostaje jeden chunk
-            # (pełna treść z nagłówkiem 'Art. N.')
-            chunks.append(
-                Chunk(
-                    content_text=body,
-                    citation=f"art. {article_num} {citation_suffix}",
-                    akt=akt_short,
-                    article_num=article_num,
-                    ustep="",
-                    ulga=ulga,
-                    source_type=source_type,
-                    eli_id=eli_id,
+            prefix = f"[{art_cite}]\n"
+            budget = max(200, max_chars - len(prefix))
+            for j, part in enumerate(_split_long(body, budget)):
+                content = part if j == 0 else f"{prefix}{part}"
+                chunks.append(
+                    Chunk(
+                        content_text=content,
+                        citation=art_cite,
+                        akt=akt_short,
+                        article_num=article_num,
+                        ustep="",
+                        ulga=ulga,
+                        source_type=source_type,
+                        eli_id=eli_id,
+                    )
                 )
-            )
             continue
 
-        header = f"art. {article_num} {citation_suffix}"
+        # Długi artykuł z ustępami — chunk na ustęp, a długie ustępy dodatkowo
+        # tniemy, zachowując prefiks kontekstowy [art. N ...] w każdej części.
+        prefix = f"[{art_cite}]\n"
+        budget = max(200, max_chars - len(prefix))
         for num, seg in ustepy:
-            cite = f"art. {article_num} ust. {num} {citation_suffix}" if num else header
-            # Prefiks kontekstowy — embedding ustępu zna swój artykuł.
-            chunks.append(
-                Chunk(
-                    content_text=f"[{header}]\n{seg}",
-                    citation=cite,
-                    akt=akt_short,
-                    article_num=article_num,
-                    ustep=num,
-                    ulga=ulga,
-                    source_type=source_type,
-                    eli_id=eli_id,
+            cite = f"art. {article_num} ust. {num} {citation_suffix}" if num else art_cite
+            for part in _split_long(seg, budget):
+                chunks.append(
+                    Chunk(
+                        content_text=f"{prefix}{part}",
+                        citation=cite,
+                        akt=akt_short,
+                        article_num=article_num,
+                        ustep=num,
+                        ulga=ulga,
+                        source_type=source_type,
+                        eli_id=eli_id,
+                    )
                 )
-            )
 
     # Numeracja porządkowa.
+    total = len(chunks)
+    for i, c in enumerate(chunks):
+        c.chunk_index = i
+        c.chunk_total = total
+    return chunks
+
+
+def chunk_document(
+    text: str,
+    *,
+    kod: str,
+    citation: str,
+    ulga: str = "",
+    source_type: str = SOURCE_USTAWA,
+    zrodlo_url: str = "",
+    max_chars: int = CHUNK_MAX_CHARS,
+) -> list[Chunk]:
+    """Chunkuje dokument prozą (objaśnienia MF / interpretacje KIS) — bez struktury
+    „Art. N / ustęp". Tnie po granicach naturalnych na części ≤ max_chars (reużywa
+    _split_long). `kod` trafia do article_num jako dyskryminator doc_id (eli_id
+    zostaje pusty, bo to nie akt ELI), a link do źródła przenosimy w
+    extra['zrodlo_url'] — stąd trafia do wyników i do linku w UI.
+    """
+    chunks: list[Chunk] = []
+    for part in _split_long(text, max_chars):
+        if not part.strip():
+            continue
+        chunks.append(
+            Chunk(
+                content_text=part,
+                citation=citation,
+                akt=kod,
+                article_num=kod,  # dyskryminator doc_id (niewyświetlany)
+                ustep="",
+                ulga=ulga,
+                source_type=source_type,
+                eli_id="",
+                extra={"zrodlo_url": zrodlo_url} if zrodlo_url else {},
+            )
+        )
     total = len(chunks)
     for i, c in enumerate(chunks):
         c.chunk_index = i

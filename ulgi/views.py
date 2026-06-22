@@ -61,7 +61,7 @@ def _source_view(d: dict) -> dict:
         "suf": suf,
         "ulga_cls": ULGA_CLS.get(ulga, ""),
         "ulga_label": ULGA_LABELS.get(ulga, ""),
-        "url": _eli_gov_url(d.get("eli_id", "")),
+        "url": d.get("zrodlo_url") or _eli_gov_url(d.get("eli_id", "")),
     }
 
 
@@ -72,6 +72,7 @@ def chat(request):
     try:
         akt = (
             Akt.objects.exclude(last_ingested_at=None)
+            .exclude(eli_id="")  # pieczęć tylko dla realnych aktów (nie objaśnień)
             .order_by("-last_ingested_at")
             .first()
         )
@@ -85,6 +86,14 @@ def chat(request):
             ctx["stan_prawny"] = d.strftime("%d.%m.%Y") if d else None
             ctx["seal_status"] = akt.eli_id or "ELI"
             ctx["seal_title"] = f"Stan prawny z tekstu jednolitego {akt.eli_id}"
+            ctx["nowele_po_tj"] = akt.nowele_po_tj
+            if akt.nowele_po_tj:
+                n = (akt.nowele or [{}])[0]
+                ctx["nowele_title"] = (
+                    f"{akt.nowele_po_tj} nowelizacji uchwalonych po tym tekście jednolitym; "
+                    f"najnowsza: {n.get('eli', '')} z {n.get('date', '')}. "
+                    "Stan prawny może nie obejmować najnowszych zmian."
+                )
     except Exception:  # noqa: BLE001 — brak bazy/danych nie może wywalić strony
         pass
     return render(request, "ulgi/chat.html", ctx)
