@@ -31,6 +31,9 @@ python-dotenv>=1.0.0
 # Opcjonalnie — eksport interpretacji KIS w XLSX (ingest_interpretacje --csv *.xlsx)
 # openpyxl>=3.1
 
+# Opcjonalnie — monitoring kolejki Celery (panel webowy)
+# flower>=2.0
+
 # Opcjonalnie — programistyczne API (api.py)
 # fastapi>=0.110
 # uvicorn>=0.29

@@ -126,6 +126,19 @@ python manage.py refresh_corpus --interpretacje # + najnowsze interpretacje KIS
 Worker Celery przydaje się też do ingestu on-demand (`ingest_act_task.delay()`)
 i automatycznych retry — patrz `deploy/` po jednostki systemd.
 
+### Monitoring kolejki (Flower)
+
+Opcjonalny panel webowy do podglądu workerów i zadań (statusy, czasy, retry):
+
+```bash
+pip install flower
+celery -A taxpilot_site flower --address=127.0.0.1 --port=5555 --basic_auth=admin:haslo
+```
+
+Domyślnie tylko na `127.0.0.1` — wchodź tunelem SSH (`-L 5555:127.0.0.1:5555`) albo
+przez nginx z basic-auth. Jednostka systemd i konfiguracja nginx w `deploy/`
+(`taxpilot-flower.service`, `nginx-taxpilot-flower.conf`).
+
 ## Uruchomienie (Streamlit — szybkie demo)
 
 ```bash

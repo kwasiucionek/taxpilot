@@ -130,6 +130,26 @@ systemctl enable --now taxpilot-refresh.timer
 # test ręczny: python manage.py refresh_corpus --act CIT
 ```
 
+### Monitoring kolejki — Flower (opcjonalnie)
+
+Panel webowy do podglądu workerów i zadań Celery. Słucha tylko na `127.0.0.1`.
+
+```bash
+.venv/bin/pip install flower
+cp deploy/taxpilot-flower.service /etc/systemd/system/
+# ZMIEŃ admin:ZMIEN_TO_HASLO w pliku jednostki (albo FLOWER_BASIC_AUTH w .env)
+systemctl daemon-reload
+systemctl enable --now taxpilot-flower
+```
+
+Dostęp — dwie drogi:
+
+- **Tunel SSH (najbezpieczniej, bez wystawiania):**
+  `ssh -N -p <PORT_SSH> -L 5555:127.0.0.1:5555 root@<serwer>.mikrus.xyz`, potem
+  `http://127.0.0.1:5555`.
+- **Publicznie przez nginx** — `deploy/nginx-taxpilot-flower.conf` (subdomena,
+  websockety, basic-auth). Jeśli wystawiasz, **zostaw uwierzytelnianie**.
+
 ## 5. nginx
 
 ```bash
@@ -148,3 +168,5 @@ OpenSearch słucha tylko na `127.0.0.1:9200` — nigdy nie wystawiaj go
   `deploy/nginx-taxpilot-streamlit.conf`.
 - **FastAPI** (opcjonalne API, `api.py`): odkomentuj fastapi/uvicorn
   w `requirements.txt`.
+- **Flower** (monitoring Celery): `deploy/taxpilot-flower.service` +
+  `deploy/nginx-taxpilot-flower.conf` (patrz sekcja 4).

@@ -1,0 +1,34 @@
+# Flower — webowy monitoring Celery (taxpilot).
+# Domyslnie TYLKO na 127.0.0.1 — najbezpieczniej wchodzic tunelem SSH:
+#   ssh -N -p <PORT_SSH> -L 5555:127.0.0.1:5555 root@<serwer>.mikrus.xyz
+#   potem otworz http://127.0.0.1:5555 lokalnie.
+# Publicznie — tylko przez nginx z basic-auth (patrz nginx-taxpilot-flower.conf).
+# Kopiuj do /etc/systemd/system/, potem: systemctl daemon-reload
+[Unit]
+Description=TaxPilot — Flower (monitoring Celery)
+After=network-online.target docker.service taxpilot-worker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/kwasiucionek/taxpilot
+EnvironmentFile=/home/kwasiucionek/taxpilot/.env
+# Czekaj, az broker (Redis w Dockerze) odpowie:
+ExecStartPre=/bin/sh -c 'until nc -z 127.0.0.1 6379; do echo "czekam na Redis..."; sleep 2; done'
+# !!! ZMIEN login:haslo ponizej (albo ustaw FLOWER_BASIC_AUTH w .env i usun --basic_auth) !!!
+ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/celery -A taxpilot_site flower \
+    --address=127.0.0.1 \
+    --port=5555 \
+    --basic_auth=admin:ZMIEN_TO_HASLO \
+    --xheaders=True \
+    --persistent=True \
+    --db=/home/kwasiucionek/taxpilot/flower.db
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=taxpilot-flower
+
+[Install]
+WantedBy=multi-user.target
