@@ -23,13 +23,65 @@ const TaxPilot = (() => {
     $("tab-qual").setAttribute("aria-selected", String(!ask));
   }
 
-  // Minimalny render: akapity + **pogrubienie**.
-  function renderText(s) {
-    const safe = esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-    return safe
-      .split(/\n{2,}/)
-      .map((p) => "<p>" + p.replace(/\n/g, "<br>") + "</p>")
-      .join("");
+  // Inline Markdown na już zescapowanym tekście.
+  function inlineMd(s) {
+    return s
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>")
+      .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, "$1<em>$2</em>")
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener">$1</a>'
+      );
+  }
+
+  // Lekki render Markdown: nagłówki, listy (• i 1.), akapity, inline.
+  function renderText(src) {
+    const lines = esc(src).replace(/\r\n?/g, "\n").split("\n");
+    let html = "";
+    let para = [];
+    const flushPara = () => {
+      if (para.length) {
+        html += "<p>" + para.map(inlineMd).join("<br>") + "</p>";
+        para = [];
+      }
+    };
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) {
+        flushPara();
+        const lvl = Math.min(h[1].length + 2, 6); // # → h3
+        html += `<h${lvl}>${inlineMd(h[2])}</h${lvl}>`;
+        i++;
+      } else if (/^\s*[-*]\s+/.test(line)) {
+        flushPara();
+        html += "<ul>";
+        while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+          html += "<li>" + inlineMd(lines[i].replace(/^\s*[-*]\s+/, "")) + "</li>";
+          i++;
+        }
+        html += "</ul>";
+      } else if (/^\s*\d+\.\s+/.test(line)) {
+        flushPara();
+        html += "<ol>";
+        while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+          html += "<li>" + inlineMd(lines[i].replace(/^\s*\d+\.\s+/, "")) + "</li>";
+          i++;
+        }
+        html += "</ol>";
+      } else if (line.trim() === "") {
+        flushPara();
+        i++;
+      } else {
+        para.push(line);
+        i++;
+      }
+    }
+    flushPara();
+    return html;
   }
 
   function ulgaTag(s) {

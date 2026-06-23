@@ -9,12 +9,18 @@ OpenSearch (JVM/Lucene) + embedder stella-pl-mini decydują o RAM:
 - OpenSearch: ~1–1.5 GB (heap 512 MB + narzut)
 - embedder (do zapytań w czasie rzeczywistym): ~1.5–2 GB
 - Django + Postgres + Redis + system: ~1 GB
+- (opcjonalnie) always-on worker Celery — druga kopia embeddera: ~1.5–2 GB
 
-**Celuj w ≥ 4 GB RAM.** Diagnostyka maszyny:
+**Minimum ~4 GB RAM.** Przy **~16 GB** (np. `steve141`) spokojnie utrzymasz
+always-on worker Celery + Beat (cały stack ~6–7 GB użytych). Diagnostyka:
 
 ```bash
 bash deploy/check_mikrus.sh
+free -m
 ```
+
+> Uwaga: Mikrus bywa bez swap (`Swap: 0`) — przy ≥ 16 GB to bez znaczenia, ale
+> unikaj nagłych skoków pod sufit.
 
 OpenSearch w kontenerze LXC: `node.store.allow_mmap=false` w compose pozwala
 wystartować bez zmiany `vm.max_map_count` (na KVM możesz włączyć mmap).
@@ -52,8 +58,10 @@ python manage.py createsuperuser
 
 ## 3. Ingest (trzy źródła)
 
-Embeddingi liczone na CPU Mikrusa są wolne — najlepiej z lokalnej maszyny
-(RTX 5090) tunelem SSH do OpenSearcha **i** Postgresa Mikrusa.
+Embeddingi liczone na CPU Mikrusa są wolne — dla pierwszego pełnego wsadu
+najszybciej z lokalnej maszyny (RTX 5090) tunelem SSH do OpenSearcha **i**
+Postgresa Mikrusa. To wybór szybkości, nie konieczność (na CPU też przejdzie,
+tylko wolniej).
 
 Mikrus używa **niestandardowego portu SSH** (sprawdź w panelu, np. `10141`):
 
@@ -81,10 +89,8 @@ python manage.py ingest_interpretacje --ulga PKUP  --limit 50 --od-daty 2023-01-
 ```
 
 Ingest jest idempotentny (`_id = doc_id`), więc można go bezpiecznie ponawiać —
-jeśli tunel padnie w połowie, po prostu odpal ponownie.
-
-Albo bezpośrednio na VPS (wolniej): te same polecenia bez tunelu.
-> `ingest_acts` jest synchroniczny — NIE wymaga always-on workera Celery.
+jeśli tunel padnie w połowie, po prostu odpal ponownie. Te same komendy działają
+też wprost na VPS (bez tunelu).
 
 ## 4. Usługi systemd
 
@@ -92,15 +98,37 @@ Albo bezpośrednio na VPS (wolniej): te same polecenia bez tunelu.
 cp deploy/taxpilot.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now taxpilot          # Django/gunicorn na 127.0.0.1:8503
-
-# opcjonalnie worker Celery (druga kopia stelli w RAM — patrz uwaga w pliku):
-cp deploy/taxpilot-worker.service /etc/systemd/system/
-systemctl enable --now taxpilot-worker
 ```
 
 `taxpilot.service` sam robi `migrate` + `collectstatic` przy starcie, więc po
 zmianach w plikach statycznych (np. `app.js`) wystarczy `systemctl restart
 taxpilot`. Jeśli statyki idą przez Cloudflare, dodatkowo wyczyść cache CDN.
+
+### Cykliczne odświeżanie korpusu — dwa warianty
+
+Ta sama logika (`refresh_corpus`: re-ingest aktów = najnowszy t.j. + nowele,
+opcjonalnie interpretacje KIS) dostępna na dwa sposoby — wybierz jeden:
+
+**A) Pełen Celery (zalecane przy ~16 GB).** Worker wykonuje, Beat planuje wg
+`CELERY_BEAT_SCHEDULE` (pon. 04:00). Daje też ingest on-demand z admina i retry.
+
+```bash
+cp deploy/taxpilot-worker.service /etc/systemd/system/
+cp deploy/taxpilot-beat.service   /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now taxpilot-worker taxpilot-beat
+```
+
+**B) Timer systemd (lżejszy — bez always-on workera).** Krótko żyjący proces
+ładuje embedder, odświeża i kończy. Sensowny na maszynach ~4 GB.
+
+```bash
+cp deploy/taxpilot-refresh.service /etc/systemd/system/
+cp deploy/taxpilot-refresh.timer   /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now taxpilot-refresh.timer
+# test ręczny: python manage.py refresh_corpus --act CIT
+```
 
 ## 5. nginx
 

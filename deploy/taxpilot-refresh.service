@@ -1,0 +1,17 @@
+# Odświeżanie korpusu jako krótko żyjący proces (bez always-on workera).
+# Kopiuj do /etc/systemd/system/ i: systemctl daemon-reload
+[Unit]
+Description=TaxPilot — odswiezanie korpusu (re-ingest aktow ELI + nowele)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=kwasiucionek
+WorkingDirectory=/home/kwasiucionek/taxpilot
+EnvironmentFile=/home/kwasiucionek/taxpilot/.env
+# Domyslnie tylko akty ELI. Z interpretacjami KIS — odkomentuj drugi wariant:
+ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/python manage.py refresh_corpus
+# ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/python manage.py refresh_corpus --interpretacje --interp-limit 20 --od-daty 2024-01-01
+TimeoutStartSec=3600
+Nice=10

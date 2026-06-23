@@ -89,7 +89,7 @@ Aplikacja to monolit **Django + HTMX** (server-side rendering ze strumieniowanie
 - **OpenSearch 3.x** — wektorowa baza z wbudowanym BM25. Przechowuje embeddingi (dim=1024) i tekst chunków. Kontener Docker, dostępny lokalnie (`127.0.0.1:9200`). Indeks `taxpilot`.
 - **SentenceTransformers** — embeddingi modelem `sdadas/stella-pl-retrieval-mini-8k` (dim=1024), uruchamianym **w procesie** aplikacji (GPU, fallback CPU).
 - **Ollama Cloud** — generacja odpowiedzi modelem `deepseek-v4-flash:cloud`; połączenie przez klucz API w nagłówku `Authorization`.
-- **Redis** — podwójna rola: broker zadań Celery (ingest w tle) oraz cache odpowiedzi (warstwa exact + semantyczna).
+- **Redis** — podwójna rola: broker zadań Celery (ingest on-demand i cykliczne odświeżanie korpusu) oraz cache odpowiedzi (warstwa exact + semantyczna).
 - **Django + HTMX** — backend renderujący HTML; HTMX obsługuje wymianę fragmentów (kwalifikacja) i SSE (streaming odpowiedzi). Bez budowania frontu (zero Node po stronie serwera).
 
 ---
@@ -355,7 +355,12 @@ Plus słowniki domenowe: `ACTS` (pinowane ustawy), `ULGI` (ulgi + kotwice), `OBJ
 
 ### 12.3 Zadania Celery (`ulgi/tasks.py`)
 
-Ingest aktów może iść w tle jako `@shared_task` (broker Redis) — wzorzec async jobs z zapisem postępu w `IngestJob`. W praktyce masowy ingest uruchamiany jest też wprost z komend zarządzających (rozdział 13).
+Dwa zadania `@shared_task` (broker Redis, postęp w `IngestJob`):
+
+- **`ingest_act_task`** — ingest pojedynczego aktu on-demand (np. klik w panelu admina → `delay()`), z automatycznym retry.
+- **`refresh_corpus_task`** — cykliczne odświeżanie całego korpusu (re-ingest aktów: najnowszy t.j. + przeliczone nowele, opcjonalnie najnowsze interpretacje KIS). Planowane przez **Celery Beat** (`CELERY_BEAT_SCHEDULE` w `settings.py`, domyślnie co tydzień).
+
+Logika `refresh_corpus` żyje w `ingest_core.py` i jest współdzielona: to samo odświeżanie można uruchomić zadaniem Celery **albo** komendą `manage.py refresh_corpus` (pod timer systemd) — patrz rozdziały 13 i 14.
 
 ---
 
@@ -389,6 +394,18 @@ python manage.py ingest_interpretacje --ulga IPBOX --limit 50 --od-daty 2023-01-
 
 Tryb wyszukiwania filtruje serwerowo do kategorii „Interpretacja indywidualna" i statusu „Aktualna", opcjonalnie po dacie (`--od-daty`/`--do-daty`); `--dry-run` wypisuje trafienia bez indeksowania. Każda interpretacja jest pobierana, czyszczona z HTML, chunkowana i indeksowana z linkiem do podglądu w EUREKA.
 
+### `refresh_corpus`
+
+Cykliczne odświeżanie korpusu jako krótko żyjący proces (ta sama logika co `refresh_corpus_task`, bez always-on workera). Re-ingest aktów (najnowszy t.j. + nowele), opcjonalnie interpretacje KIS:
+
+```bash
+python manage.py refresh_corpus                      # wszystkie akty
+python manage.py refresh_corpus --act CIT --act PIT  # wybrane
+python manage.py refresh_corpus --interpretacje --interp-limit 20 --od-daty 2024-01-01
+```
+
+Odporny na błąd pojedynczej pozycji — leci dalej i raportuje podsumowanie. Pod timer systemd (patrz rozdział 14).
+
 ### `discovery.py`
 
 Diagnostyka ELI: wypisuje kandydatów (teksty jednolite, nowelizacje, akty bazowe) dla pinowanych ustaw — pomocne przy weryfikacji, co resolver wybierze.
@@ -413,9 +430,13 @@ Objaśnienia i interpretacje reużywają modeli `Akt`/`Chunk` jako pseudo-akty z
 
 Ustawy podatkowe są często nowelizowane. Zamiast pinować konkretną wersję, resolver pobiera **najnowszy tekst jednolity** (gotowy konsolidat). Dodatkowo wykrywa nowelizacje uchwalone *po* dacie t.j. i ostrzega o nich badgem — użytkownik wie, że stan prawny może nie obejmować najświeższych zmian. To uczciwość, której wymaga domena prawna.
 
-### Dlaczego embedding na GPU (5090), a serwing na słabym VPS?
+### Dlaczego embedding na GPU (5090), a serwing na VPS?
 
-Ciężki etap to liczenie wektorów przy ingeście (atencja S², setki–tysiące chunków). Uruchamiany lokalnie na RTX 5090 w fp16 z większym batchem skraca pełny ingest z **godzin (CPU na VPS) do minut**. Zapis idzie przez tunel SSH wprost do PostgreSQL i OpenSearch na VPS. Serwing potrzebuje tylko lekkiego embeddingu pojedynczego zapytania, więc CPU VPS wystarcza. Wektory są zgodne (ten sam model, znormalizowane), więc liczone na GPU lądują w tej samej przestrzeni co zapytania liczone na CPU.
+Ciężki etap to liczenie wektorów przy ingeście (atencja S², setki–tysiące chunków). Uruchamiany lokalnie na RTX 5090 w fp16 z większym batchem skraca pełny ingest z **godzin (CPU na VPS) do minut**. Zapis idzie przez tunel SSH wprost do PostgreSQL i OpenSearch na VPS. Serwing potrzebuje tylko lekkiego embeddingu pojedynczego zapytania, więc CPU VPS wystarcza. Wektory są zgodne (ten sam model, znormalizowane), więc liczone na GPU lądują w tej samej przestrzeni co zapytania liczone na CPU. To wybór **szybkości**, a nie konieczność RAM-owa — na hoście z ~16 GB ingest na CPU również przejdzie, tylko wolniej.
+
+### Dlaczego Celery Beat *lub* timer systemd do odświeżania?
+
+`refresh_corpus` jest wspólną funkcją, a Celery i systemd to dwie cienkie nakładki na nią. Daje to wybór zależny od zasobów: przy hoście z ~16 GB sensowny jest **pełen Celery** (worker + Beat) — bo always-on worker (druga kopia embeddera, ~1,5–2 GB) się mieści, a przy okazji dostajemy ingest on-demand z admina i retry. Na maszynach ~4 GB lepszy jest **timer systemd** uruchamiający `manage.py refresh_corpus` jako krótko żyjący proces, bez trzymania workera w pamięci. Ta sama logika, dwa tryby wdrożenia — bez duplikacji kodu.
 
 ### Dlaczego BM25 ma większą wagę w RRF niż kNN?
 

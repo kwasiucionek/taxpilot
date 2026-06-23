@@ -3,7 +3,7 @@ Django>=5.0,<6.0
 celery>=5.3
 redis>=5.0
 psycopg[binary]>=3.1
-gunicorn>=21.2  # serwer WSGI (produkcja)
+gunicorn>=21.2          # produkcyjny serwer WSGI
 
 # OpenSearch — indeks wyszukiwania
 opensearch-py>=3.0.0
@@ -13,14 +13,27 @@ sentence-transformers>=3.0.0
 torch>=2.1.0
 numpy>=1.26
 
-# ELI API + parsowanie HTML aktów
+# ELI API + dokumenty (HTML aktów, PDF objaśnień / ISAP)
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
-pdfplumber>=0.11.0  # ekstrakcja tekstu z PDF (teksty jednolite ELI)
+pdfplumber>=0.11.0      # ekstrakcja tekstu z PDF (akty ELI, objaśnienia MF)
+
+# Kwalifikacja — ustrukturyzowane wyjście
+pydantic>=2.5
 
 # Zmienne środowiskowe
 python-dotenv>=1.0.0
+
+# Cykliczne odświeżanie korpusu używa celery.schedules.crontab (część Celery) —
+# statyczny CELERY_BEAT_SCHEDULE, bez django-celery-beat.
+
+# Opcjonalnie — eksport interpretacji KIS w XLSX (ingest_interpretacje --csv *.xlsx)
+# openpyxl>=3.1
+
+# Opcjonalnie — programistyczne API (api.py)
+# fastapi>=0.110
+# uvicorn>=0.29
 
 # Opcjonalnie — szybkie demo Streamlit (app.py) zamiast Django
 # streamlit>=1.38.0

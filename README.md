@@ -17,7 +17,7 @@ udaje wiążącej porady — wspiera doradcę.
 | **PostgreSQL** | system of record (akty, chunki, zadania ingestu, historia) |
 | **OpenSearch** | indeks wyszukiwania — hybryda BM25 (Stempel) + kNN, pipeline RRF |
 | **Redis** | broker Celery **oraz** semantyczny cache odpowiedzi (exact + kosinus) |
-| **Celery** | ingest w tle (ELI → chunking → embeddingi → bazy) |
+| **Celery (+ Beat)** | ingest on-demand w tle oraz cykliczne odświeżanie korpusu |
 | **stella-pl-mini** | embedder (`sdadas/stella-pl-retrieval-mini-8k`, dim 1024) |
 | **Ollama** | generacja odpowiedzi (`deepseek-v4-flash:cloud`), streaming po SSE |
 | **Django + HTMX** | aplikacja webowa (czat ze streamingiem + asystent kwalifikacji) |
@@ -25,7 +25,8 @@ udaje wiążącej porady — wspiera doradcę.
 Korpus **ustaw aktualizuje się sam**: resolver ELI pobiera najnowszy tekst
 jednolity i wykrywa nowelizacje uchwalone po jego publikacji (ostrzeżenie o
 stanie prawnym). Objaśnienia MF i interpretacje KIS dochodzą jako pseudo-akty,
-bez zmiany schematu.
+bez zmiany schematu. Zadanie `refresh_corpus` (Celery Beat lub timer systemd)
+robi to cyklicznie.
 
 Rdzeń RAG jest frameworkowo-niezależny; Django go owija. Dostępne też
 szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
@@ -38,7 +39,7 @@ szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
 | plik | rola |
 |------|------|
 | `config.py` | konfiguracja, rejestr aktów (ELI), mapa ulg→artykuły, źródła MF, węzły przepisów EUREKA |
-| `eli_client.py` | pobieranie tekstów aktów z `api.sejm.gov.pl/eli`, ekstrakcja PDF/HTML |
+| `eli_client.py` | pobieranie tekstów aktów z `api.sejm.gov.pl/eli`, ekstrakcja PDF (pdfplumber) / HTML |
 | `discovery.py` | resolver ELI: wybór najnowszego tekstu jednolitego, wykrywanie nowelizacji po t.j. |
 | `chunking.py` | podział aktu na jednostki redakcyjne (artykuł/ustęp) + chunkowanie prozy (objaśnienia/interpretacje), twardy podział długich fragmentów |
 | `opensearch_schema.py` | mapping (Stempel/morfologik + kNN + daty), pipeline hybrydy RRF, zapytania |
@@ -52,18 +53,19 @@ szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
 
 | ścieżka | rola |
 |---------|------|
-| `taxpilot_site/` | projekt (settings, celery, urls, wsgi/asgi) |
+| `taxpilot_site/` | projekt (settings, celery + `CELERY_BEAT_SCHEDULE`, urls, wsgi/asgi) |
 | `ulgi/models.py` | Akt, Chunk, IngestJob, QualificationQuery, Chat* |
 | `ulgi/views.py` | widoki: czat (SSE), kwalifikacja (HTMX), widok źródeł |
 | `ulgi/services.py` | warstwa usług (answer/qualify) spinająca search + cache |
 | `ulgi/cache.py` | semantyczny cache odpowiedzi na Redisie (exact + kosinus ≥ 0.95) |
-| `ulgi/ingest_core.py` | ingest aktów ELI do Postgres + OpenSearch |
+| `ulgi/ingest_core.py` | ingest aktów ELI + `refresh_corpus` (odświeżanie całości) |
 | `ulgi/ingest_docs.py` | ingest objaśnień MF i interpretacji KIS (pseudo-akty) |
 | `ulgi/kis_client.py` | klient publicznego API EUREKA (wyszukiwanie + pobieranie interpretacji) |
-| `ulgi/tasks.py` | zadanie Celery `ingest_act_task` |
+| `ulgi/tasks.py` | zadania Celery: `ingest_act_task`, `refresh_corpus_task` |
 | `ulgi/management/commands/ingest_acts.py` | ingest ustaw (ELI) |
 | `ulgi/management/commands/ingest_objasnienia.py` | ingest objaśnień MF (PDF) |
 | `ulgi/management/commands/ingest_interpretacje.py` | ingest interpretacji KIS (EUREKA) |
+| `ulgi/management/commands/refresh_corpus.py` | odświeżenie korpusu (dla timera systemd) |
 | `app.py` | alternatywne demo w Streamlit |
 
 ## Wymagania infrastruktury
@@ -91,7 +93,7 @@ pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser
 
-# Ingest ustaw (synchronicznie, bez Celery — oszczędność RAM):
+# Ingest ustaw (synchronicznie):
 python manage.py ingest_acts --all --od 2024-01-01
 # ...albo przez Celery:  python manage.py ingest_acts --act CIT --async
 
@@ -106,11 +108,23 @@ python manage.py runserver           # dev
 # produkcyjnie: gunicorn taxpilot_site.wsgi  (patrz deploy/)
 ```
 
-Worker Celery (tylko jeśli chcesz ingest w tle on-demand):
+### Cykliczne odświeżanie korpusu
+
+Re-ingest aktów (najnowszy t.j. + nowele), opcjonalnie interpretacje KIS —
+ta sama logika (`refresh_corpus`) dostępna dwoma drogami:
 
 ```bash
-celery -A taxpilot_site worker -l info --concurrency 1
+# A) Celery Beat planuje, worker wykonuje (CELERY_BEAT_SCHEDULE w settings):
+celery -A taxpilot_site worker -l info
+celery -A taxpilot_site beat   -l info
+
+# B) Timer systemd uruchamia krótko żyjącą komendę (bez always-on workera):
+python manage.py refresh_corpus                 # same akty
+python manage.py refresh_corpus --interpretacje # + najnowsze interpretacje KIS
 ```
+
+Worker Celery przydaje się też do ingestu on-demand (`ingest_act_task.delay()`)
+i automatycznych retry — patrz `deploy/` po jednostki systemd.
 
 ## Uruchomienie (Streamlit — szybkie demo)
 
@@ -119,18 +133,20 @@ pip install streamlit
 streamlit run app.py --server.port 8503
 ```
 
-## Strategia ingestu (oszczędność RAM)
+## Strategia ingestu
 
-Embeddingi licz lokalnie (RTX 5090) i wgrywaj do zdalnego OpenSearcha
-tunelem SSH, albo odpalaj `manage.py ingest_*` on-demand zamiast
-trzymać always-on worker Celery (druga kopia stelli w RAM). Pełny ingest na
-GPU schodzi z godzin (CPU na VPS) do minut; ingest jest idempotentny
-(`_id = doc_id`), więc można go bezpiecznie ponawiać.
+Embeddingi można liczyć **lokalnie na GPU (RTX 5090)** i wgrywać do zdalnego
+OpenSearcha/Postgresa tunelem SSH — pełny ingest schodzi wtedy z godzin (CPU na
+VPS) do minut. To wybór **szybkości**, nie konieczność RAM-owa: przy hoście z
+~16 GB always-on worker Celery (druga kopia embeddera, ~1,5–2 GB) mieści się
+spokojnie. Na maszynach ≥ 4 GB prościej puszczać `manage.py ingest_*` / timer
+zamiast trzymać worker. Ingest jest idempotentny (`_id = doc_id`), więc można go
+bezpiecznie ponawiać.
 
 ## Wdrożenie
 
 Patrz `deploy/README-mikrus.md` — pełny stack na Mikrusie
-(OpenSearch + PostgreSQL + Redis + Django za nginx).
+(OpenSearch + PostgreSQL + Redis + Django za nginx, worker/Beat lub timer).
 
 ## TODO
 
@@ -143,3 +159,4 @@ Patrz `deploy/README-mikrus.md` — pełny stack na Mikrusie
 - [x] Widoki HTMX: czat ze streamingiem (SSE) + tryb kwalifikacji.
 - [x] Ingest interpretacji KIS (eureka.mf.gov.pl — wyszukiwanie po przepisie) i objaśnień MF.
 - [x] Hybryda BM25 + kNN (pipeline RRF), semantyczny cache na Redisie, fragmenty źródeł z bazy.
+- [x] Cykliczne odświeżanie korpusu: zadanie `refresh_corpus` (Celery Beat) + wariant timer systemd.

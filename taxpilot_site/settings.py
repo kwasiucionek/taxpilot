@@ -33,6 +33,9 @@ CSRF_TRUSTED_ORIGINS = [
     if o.strip()
 ]
 
+# Za Cloudflare + nginx (TLS terminowany wyżej) Django musi rozpoznać HTTPS po
+# nagłówku, inaczej request.is_secure() = False i CSRF na POST-ach (origin https)
+# leci 403. nginx przekazuje oryginalny X-Forwarded-Proto z Cloudflare.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
@@ -96,6 +99,21 @@ CELERY_TASK_TIME_LIMIT = 60 * 60  # ingest może trwać
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+
+# Harmonogram Beat — cotygodniowe odświeżanie korpusu (pon. 04:00 Europe/Warsaw).
+# Domyślnie tylko akty ELI (najnowszy t.j. + nowele). Interpretacje KIS są
+# wyłączone (sieć + embedding) — włącz kwargs {"with_interpretacje": True}, gdy
+# chcesz też je dociągać. Alternatywa pod mały RAM: timer systemd + komenda
+# `manage.py refresh_corpus` (patrz deploy/), bez always-on workera.
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    "refresh-corpus-weekly": {
+        "task": "ulgi.tasks.refresh_corpus_task",
+        "schedule": crontab(day_of_week=1, hour=4, minute=0),
+        "kwargs": {"with_interpretacje": False},
+    },
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

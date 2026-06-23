@@ -122,6 +122,20 @@
     }
     .turn.bot .bubble{font-size:16px; line-height:1.62; color:var(--ink)}
     .turn.bot .bubble p{margin:0 0 .7em}
+    .turn.bot .bubble :first-child{margin-top:0}
+    .turn.bot .bubble h3,.turn.bot .bubble h4,.turn.bot .bubble h5{
+      font-family:var(--serif); color:var(--ink); line-height:1.3;
+      margin:1em 0 .4em; font-weight:600}
+    .turn.bot .bubble h3{font-size:18px}
+    .turn.bot .bubble h4{font-size:16.5px}
+    .turn.bot .bubble h5{font-size:15px}
+    .turn.bot .bubble ul,.turn.bot .bubble ol{margin:0 0 .7em; padding-left:1.4em}
+    .turn.bot .bubble li{margin:.2em 0}
+    .turn.bot .bubble li::marker{color:var(--petrol)}
+    .turn.bot .bubble code{font-family:var(--mono); font-size:.88em;
+      background:var(--petrol-tint); padding:1px 5px; border-radius:3px}
+    .turn.bot .bubble strong{font-weight:600}
+    .turn.bot .bubble a{color:var(--petrol); text-decoration:underline}
     .turn.bot .bubble.streaming::after{content:"▌"; color:var(--petrol); animation:blink 1s steps(2) infinite}
     @keyframes blink{50%{opacity:0}}
 

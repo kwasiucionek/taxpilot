@@ -1,10 +1,6 @@
 # Warstwa danych TaxPilot: OpenSearch + PostgreSQL + Redis.
 # Aplikacja (gunicorn) działa na hoście i łączy się po 127.0.0.1.
 #
-# WAŻNE — reużywasz istniejącego OpenSearcha (kontener opensearch-uodo)?
-# Pomiń usługę `opensearch` (kolidowałaby na porcie 9200). Odpal tylko bazy:
-#     docker compose up -d postgres redis
-# Na świeżej maszynie bez OpenSearcha: docker compose up -d --build
 #
 # Zmienne POSTGRES_* muszą zgadzać się z .env aplikacji. Compose czyta je
 # z .env w katalogu deploy/ albo ze środowiska; domyślne = .env.example.

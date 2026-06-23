@@ -1,7 +1,8 @@
 [Unit]
 Description=TaxPilot — Celery worker (ingest w tle)
-After=network.target redis.service postgresql.service docker.service
-Requires=redis.service
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
 
 # UWAGA: worker ładuje WŁASNĄ kopię stelli (~2 GB RAM). Na małym Mikrusie
 # rozważ pominięcie tej usługi i ingest przez `manage.py ingest_acts`
@@ -12,6 +13,7 @@ Type=simple
 User=root
 WorkingDirectory=/home/kwasiucionek/taxpilot
 
+ExecStartPre=/bin/sh -c 'until nc -z 127.0.0.1 6379; do echo "czekam na Redis..."; sleep 2; done'
 ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/celery -A taxpilot_site worker \
     --loglevel info \
     --concurrency 1

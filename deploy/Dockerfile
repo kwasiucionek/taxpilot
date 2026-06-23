@@ -1,9 +1,5 @@
 # OpenSearch + polski analizator Stempel (analysis-stempel).
 #
-# Stempel jest oficjalnie pakowanym pluginem OpenSearch — to ten sam
-# stemmer, którego używa uodo_rag (filtr `polish_stem`). Działa pewnie
-# na każdej wersji OpenSearch.
-#
 # morfologik (lematyzacja słownikowa) NIE jest oficjalnym pluginem
 # OpenSearch — to był plugin ze świata Elasticsearch. Jeśli znajdziesz
 # port `analysis-morfologik` zgodny z poniższą wersją, doinstaluj go

@@ -1,0 +1,17 @@
+# ALTERNATYWA dla timera: Celery Beat (harmonogram z settings.CELERY_BEAT_SCHEDULE).
+# Wymaga dzialajacego workera (taxpilot-worker.service) — Beat tylko planuje,
+# worker wykonuje. Uwaga: worker trzyma druga kopie embeddera w RAM.
+[Unit]
+Description=TaxPilot — Celery Beat (harmonogram)
+After=network-online.target redis.service
+Wants=network-online.target
+
+[Service]
+User=kwasiucionek
+WorkingDirectory=/home/kwasiucionek/taxpilot
+EnvironmentFile=/home/kwasiucionek/taxpilot/.env
+ExecStart=/home/kwasiucionek/taxpilot/.venv/bin/celery -A taxpilot_site beat -l info
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
