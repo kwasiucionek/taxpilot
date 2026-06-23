@@ -131,3 +131,62 @@ def ingest_act_to_stores(kod: str, obowiazuje_od: str | None = None, task_id: st
         job.finished_at = timezone.now()
         job.save()
         raise
+
+
+def refresh_corpus(
+    *,
+    acts: list[str] | None = None,
+    with_interpretacje: bool = False,
+    interp_limit: int = 20,
+    od_daty: str | None = None,
+    log=print,
+) -> dict:
+    """Odświeża korpus.
+
+    Re-ingest aktów ELI (resolver bierze najnowszy tekst jednolity i przelicza
+    nowelizacje po t.j.), opcjonalnie dociąga najnowsze interpretacje KIS per
+    ulga. Odporne na błąd pojedynczej pozycji — leci dalej i raportuje w
+    podsumowaniu. Każdy akt zakłada własny `IngestJob` (przez ingest_act_to_stores).
+    """
+    from config import ACTS
+
+    kody = acts or list(ACTS)
+    summary: dict = {"acts": {}, "interpretacje": {}}
+
+    for kod in kody:
+        log(f"[refresh] akt {kod}...")
+        try:
+            out = ingest_act_to_stores(kod, obowiazuje_od=od_daty)
+            summary["acts"][kod] = {
+                "ok": out["ok"],
+                "errors": out["errors"],
+                "nowele_po_tj": out["nowele_po_tj"],
+                "stan_prawny": out["stan_prawny"],
+            }
+        except Exception as e:  # noqa: BLE001
+            summary["acts"][kod] = {"error": str(e)[:300]}
+            log(f"[refresh] akt {kod} BŁĄD: {e}")
+
+    if with_interpretacje:
+        from config import PRZEPISY_BY_ULGA
+
+        from .ingest_docs import ingest_interpretacja_to_stores
+        from .kis_client import search_interpretacje
+
+        for ulga, przepisy in PRZEPISY_BY_ULGA.items():
+            log(f"[refresh] interpretacje {ulga}...")
+            try:
+                hits = search_interpretacje(przepisy, od_daty=od_daty, limit=interp_limit)
+                done = 0
+                for h in hits:
+                    try:
+                        ingest_interpretacja_to_stores(h["id"], ulga=ulga)
+                        done += 1
+                    except Exception as e:  # noqa: BLE001
+                        log(f"[refresh] interpretacja {h['id']} BŁĄD: {e}")
+                summary["interpretacje"][ulga] = {"znaleziono": len(hits), "zaindeksowano": done}
+            except Exception as e:  # noqa: BLE001
+                summary["interpretacje"][ulga] = {"error": str(e)[:300]}
+                log(f"[refresh] interpretacje {ulga} BŁĄD: {e}")
+
+    return summary
