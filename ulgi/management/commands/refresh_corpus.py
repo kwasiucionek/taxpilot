@@ -30,8 +30,15 @@ class Command(BaseCommand):
             action="store_true",
             help="dociągnij też najnowsze interpretacje KIS per ulga",
         )
-        parser.add_argument("--interp-limit", type=int, default=20, help="max interpretacji na ulgę")
+        parser.add_argument(
+            "--interp-limit", type=int, default=20, help="max interpretacji na ulgę"
+        )
         parser.add_argument("--od-daty", dest="od_daty", help="stan prawny / data od (YYYY-MM-DD)")
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="wymuś pełne przeliczenie embeddingów (pomija inkrementalny skip po hashu)",
+        )
 
     def handle(self, *args, **opts):
         from ulgi.ingest_core import refresh_corpus
@@ -42,6 +49,7 @@ class Command(BaseCommand):
             with_interpretacje=opts["interpretacje"],
             interp_limit=opts["interp_limit"],
             od_daty=opts["od_daty"],
+            force=opts["force"],
             log=self.stdout.write,
         )
 
@@ -52,7 +60,8 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  akt {kod}: chunks={r['ok']}, błędy={r['errors']}, "
+                        f"  akt {kod}: policzono={r['embedded']}, pominięto={r['skipped']}, "
+                        f"usunięto={r['removed']}, błędy={r['errors']}, "
                         f"nowele po t.j.={r['nowele_po_tj']}, stan={r['stan_prawny']}"
                     )
                 )

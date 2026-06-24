@@ -84,8 +84,10 @@ ACTS: dict[str, dict] = {
 ULGI: dict[str, dict] = {
     "BR": {
         "name": "Ulga B+R (badawczo-rozwojowa)",
-        "anchors": {"CIT": ["18d", "18da", "18e", "18ea", "18eb"],
-                    "PIT": ["26e", "26f", "26g", "26ga", "26gb"]},
+        "anchors": {
+            "CIT": ["18d", "18da", "18e", "18ea", "18eb"],
+            "PIT": ["26e", "26f", "26g", "26ga", "26gb"],
+        },
     },
     "IPBOX": {
         "name": "IP Box (preferencyjne 5% od kwalifikowanego IP)",
@@ -134,8 +136,8 @@ OBJASNIENIA: dict[str, dict] = {
 
 # ── EUREKA / KIS — wyszukiwanie interpretacji indywidualnych ─────
 # Kody filtrów serwerowych wyszukiwarki EUREKA (POST wyszukiwarka/informacje):
-KIS_KATEGORIA_INTERPRETACJA_ID = 1   # KATEGORIA_INFORMACJI: „Interpretacja indywidualna"
-KIS_STATUS_AKTUALNA_ID = 27          # STATUS_INFORMACJI: „Aktualna"
+KIS_KATEGORIA_INTERPRETACJA_ID = 1  # KATEGORIA_INFORMACJI: „Interpretacja indywidualna"
+KIS_STATUS_AKTUALNA_ID = 27  # STATUS_INFORMACJI: „Aktualna"
 
 # Mapa: ulga → ID węzłów przepisów (słownik PRZEPISY, sid=19) dla naszych kotwic.
 # Pozwala `ingest_interpretacje --ulga IPBOX` samodzielnie dobrać artykuły.
@@ -143,9 +145,9 @@ KIS_STATUS_AKTUALNA_ID = 27          # STATUS_INFORMACJI: „Aktualna"
 # kosztach z praw autorskich, a nie całe (szerokie) art. 22. Do poszerzenia o
 # katalog działalności twórczych można dołożyć 35900 (art. 22 ust. 9b).
 PRZEPISY_BY_ULGA: dict[str, list[int]] = {
-    "BR":    [35573, 40951],                # art. 18d CIT, art. 26e PIT
+    "BR": [35573, 40951],  # art. 18d CIT, art. 26e PIT
     "IPBOX": [36247, 36274, 41618, 41633],  # art. 24d/24e CIT, art. 30ca/30cb PIT
-    "PKUP":  [35893],                       # art. 22 ust. 9 pkt 3 PIT (50% KUP)
+    "PKUP": [35893],  # art. 22 ust. 9 pkt 3 PIT (50% KUP)
 }
 
 # ── Wyszukiwanie ─────────────────────────────────────────────────

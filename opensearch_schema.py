@@ -52,9 +52,7 @@ _BM25_FIELDS = ["content_text^1.0", "content_text.pl^2.0"]
 
 
 def get_client() -> OpenSearch:
-    return OpenSearch(
-        hosts=[OPENSEARCH_URL], timeout=60, max_retries=3, retry_on_timeout=True
-    )
+    return OpenSearch(hosts=[OPENSEARCH_URL], timeout=60, max_retries=3, retry_on_timeout=True)
 
 
 # ─────────────────────────── SCHEMAT ─────────────────────────────
@@ -186,9 +184,7 @@ def build_filters(
 
 
 def _content_match(text: str) -> dict:
-    return {
-        "multi_match": {"query": text, "fields": _BM25_FIELDS, "type": "best_fields"}
-    }
+    return {"multi_match": {"query": text, "fields": _BM25_FIELDS, "type": "best_fields"}}
 
 
 def knn_body(vector: list[float], k: int, filter_must: list[dict] | None = None) -> dict:
@@ -210,9 +206,7 @@ def hybrid_body(
         return knn_body(vector, k, filter_must)
 
     if filter_must:
-        bm25_q: dict = {
-            "bool": {"must": [_content_match(text)], "filter": filter_must}
-        }
+        bm25_q: dict = {"bool": {"must": [_content_match(text)], "filter": filter_must}}
         knn_q: dict = {
             "knn": {
                 "embedding": {

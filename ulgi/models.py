@@ -55,6 +55,7 @@ class Chunk(models.Model):
     ulga = models.CharField(max_length=16, choices=ULGA_CHOICES, blank=True)
     source_type = models.CharField(max_length=24, choices=SOURCE_CHOICES, default="ustawa")
     content_text = models.TextField()
+    content_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
     eli_id = models.CharField(max_length=64, blank=True)
     obowiazuje_od = models.DateField(null=True, blank=True)
     obowiazuje_do = models.DateField(null=True, blank=True)

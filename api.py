@@ -31,7 +31,6 @@ from pydantic import BaseModel, Field
 from config import (
     ACTS,
     DEFAULT_OLLAMA_MODEL,
-    OLLAMA_CLOUD_API_KEY,
     OLLAMA_URL,
     SOURCE_INTERPRETACJA,
     SOURCE_OBJASNIENIA,
@@ -129,7 +128,7 @@ async def search(req: SearchRequest):
             on_date=req.on_date,
         )
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
     return {"results": docs, "count": len(docs)}
 
 
@@ -202,4 +201,4 @@ async def qualify(req: QualifyRequest):
     try:
         return assess(req.opis, ulgi=req.ulgi, on_date=req.on_date, model=req.model)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

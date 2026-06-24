@@ -68,6 +68,7 @@ def _ref_entry(entry: dict) -> tuple[str | None, str | None, str]:
 
 # ─────────────────────────── METADANE / REFERENCJE ───────────────────────────
 
+
 def fetch_metadata(publisher: str, year: int, position: int) -> dict:
     url = f"{ELI_API_BASE}/acts/{publisher}/{year}/{position}"
     r = requests.get(url, headers=_JSON, timeout=30)
@@ -103,9 +104,7 @@ def resolve_consolidated(original_eli: str) -> dict:
                 candidates.append(act)
 
     if not candidates:
-        raise ValueError(
-            f"Brak referencji 'tekst jednolity' (Obwieszczenie) dla {original_eli}"
-        )
+        raise ValueError(f"Brak referencji 'tekst jednolity' (Obwieszczenie) dla {original_eli}")
 
     def _rank(a: dict) -> tuple:
         return (
@@ -116,7 +115,10 @@ def resolve_consolidated(original_eli: str) -> dict:
     best = max(candidates, key=_rank)
     logger.info(
         "Tekst jednolity %s → %s (%s, ogł. %s)",
-        original_eli, best["ELI"], best.get("status"), best.get("promulgation"),
+        original_eli,
+        best["ELI"],
+        best.get("status"),
+        best.get("promulgation"),
     )
     return best
 
@@ -147,6 +149,7 @@ def post_jednolity_amendments(tj_eli: str) -> list[dict]:
 
 # ─────────────────────────── EKSTRAKCJA TEKSTU ───────────────────────────
 
+
 def html_to_text(html: str) -> str:
     """Strip HTML → tekst; bloki łamiemy nową linią (regexy chunkingu liczą na
     „Art. N." / ustępy na początku linii)."""
@@ -164,9 +167,9 @@ def html_to_text(html: str) -> str:
 # Nagłówki/stopki stron ISAP do odfiltrowania (cała linia = element redakcyjny strony).
 _RE_PDF_NOISE = re.compile(
     r"^(?:"
-    r"Dz\.?\s*U\.?\s*\d{4}\s+poz\.\s*\d+"       # nagłówek strony: „Dz. U. 2026 poz. 554"
-    r"|.*Kancelaria Sejmu.*"                     # stopka redakcyjna ISAP
-    r"|[–-]\s*\d+\s*[–-]"                        # numer strony: „– 5 –"
+    r"Dz\.?\s*U\.?\s*\d{4}\s+poz\.\s*\d+"  # nagłówek strony: „Dz. U. 2026 poz. 554"
+    r"|.*Kancelaria Sejmu.*"  # stopka redakcyjna ISAP
+    r"|[–-]\s*\d+\s*[–-]"  # numer strony: „– 5 –"
     r")\s*$"
 )
 # Wyraz przeniesiony z podziałem sylab na końcu wiersza: „opodat-\nkowania".
@@ -213,9 +216,7 @@ def _pick_pdf_url(base: str, texts: list | None) -> str:
     return f"{base}/text.pdf"
 
 
-def fetch_text(
-    publisher: str, year: int, position: int, *, meta: dict | None = None
-) -> str:
+def fetch_text(publisher: str, year: int, position: int, *, meta: dict | None = None) -> str:
     """Tekst aktu: HTML jeśli dostępny, inaczej PDF (preferując tekst jednolity).
     `meta` można podać, by nie pobierać metadanych drugi raz."""
     base = f"{ELI_API_BASE}/acts/{publisher}/{year}/{position}"
@@ -268,18 +269,24 @@ def fetch_act(act: dict) -> tuple[str, str, dict]:
         logger.warning(
             "%s: po tekście jednolitym %s weszło %d nowelizacji (najnowsza %s, %s) — "
             "stan prawny może nie obejmować najnowszych zmian.",
-            act["short"], cons["ELI"], len(nowele),
-            nowele[0].get("eli"), nowele[0].get("date"),
+            act["short"],
+            cons["ELI"],
+            len(nowele),
+            nowele[0].get("eli"),
+            nowele[0].get("date"),
         )
     else:
         logger.info(
             "%s: tekst jednolity %s bez nowelizacji po publikacji (pełna aktualność).",
-            act["short"], cons["ELI"],
+            act["short"],
+            cons["ELI"],
         )
 
     logger.info(
         "Pobieram %s (t.j. %s, stan prawny %s)...",
-        act["short"], cons["ELI"], meta.get("legalStatusDate"),
+        act["short"],
+        cons["ELI"],
+        meta.get("legalStatusDate"),
     )
     text = fetch_text(pub, year, pos, meta=meta)
     return cons["ELI"], text, meta

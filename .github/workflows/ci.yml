@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    env:
+      # Testy nie dotykają sieci ani Postgresa; ustawiamy ENV, by produkcyjny
+      # strażnik settings.py (DEBUG=0 + domyślny SECRET_KEY) nie przerwał startu.
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: "ci-insecure-secret-not-for-prod"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Ruff (format)
+        run: ruff format --check .
+
+      - name: Mypy
+        run: mypy .
+
+      - name: Pytest
+        run: pytest -q

@@ -81,6 +81,19 @@ szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
 cp .env.example .env   # uzupełnij OLLAMA_CLOUD_API_KEY, hasła Postgres
 ```
 
+**Secure-by-default:** `DJANGO_DEBUG` jest domyślnie wyłączony (produkcja). Do
+pracy lokalnej ustaw w `.env`:
+
+```bash
+DJANGO_DEBUG=1
+DJANGO_SECRET_KEY=dowolny-losowy-klucz-do-dev
+```
+
+W produkcji (`DJANGO_DEBUG=0`) aplikacja **wymaga** ustawienia własnego
+`DJANGO_SECRET_KEY` (inaczej start jest przerywany) i automatycznie włącza
+hardening (Secure cookies, HSTS, nosniff). SSL-redirect jest opcjonalny
+(`DJANGO_SECURE_SSL_REDIRECT=1`) — zwykle robi to już Cloudflare/nginx.
+
 Analizator polski: domyślnie **Stempel** (`POLISH_STEM_FILTER=polish_stem`).
 morfologik nie jest oficjalnym pluginem OpenSearch — patrz `deploy/Dockerfile`.
 
@@ -104,9 +117,34 @@ python manage.py ingest_objasnienia --all
 python manage.py ingest_interpretacje --ulga IPBOX --limit 50 --od-daty 2023-01-01
 # ...podgląd bez indeksowania:  --dry-run
 
-python manage.py runserver           # dev
+python manage.py runserver           # dev (wymaga DJANGO_DEBUG=1)
 # produkcyjnie: gunicorn taxpilot_site.wsgi  (patrz deploy/)
 ```
+
+Health-check (liveness + readiness bazy) dla nginx/systemd/monitoringu:
+`GET /healthz` → `200 {"status": "ok"}` lub `503` przy niedostępnej bazie.
+
+## Jakość kodu i testy
+
+Lint, format i testy konfiguruje `pyproject.toml`. Zależności deweloperskie:
+
+```bash
+pip install -r requirements-dev.txt   # ruff + pytest(-django) + mypy + django-stubs
+
+ruff check .            # lint
+ruff format --check .    # weryfikacja formatu (bez `--check` formatuje)
+mypy .                   # typy (django-stubs rozumie modele/manager `.objects`)
+pytest                   # testy jednostkowe (czysta logika, bez sieci/DB)
+```
+
+`mypy` używa wtyczki `django-stubs` (`django_settings_module` w `pyproject.toml`),
+więc ładuje `settings` przy starcie — potrzebuje `DJANGO_DEBUG=1` i
+`DJANGO_SECRET_KEY` w `.env` (lub ENV). CI ustawia te zmienne samo.
+
+Testy (`tests/`) pokrywają logikę niezależną od usług zewnętrznych: klucze
+semantycznego cache, budowanie filtrów/zapytań OpenSearch, chunking aktów,
+helpery widoków i budowanie promptu. CI (`.github/workflows/ci.yml`) uruchamia
+lint + format + testy na każdym push/PR.
 
 ### Cykliczne odświeżanie korpusu
 
@@ -173,3 +211,4 @@ Patrz `deploy/README-mikrus.md` — pełny stack na Mikrusie
 - [x] Ingest interpretacji KIS (eureka.mf.gov.pl — wyszukiwanie po przepisie) i objaśnień MF.
 - [x] Hybryda BM25 + kNN (pipeline RRF), semantyczny cache na Redisie, fragmenty źródeł z bazy.
 - [x] Cykliczne odświeżanie korpusu: zadanie `refresh_corpus` (Celery Beat) + wariant timer systemd.
+- [x] Fundament jakości: `ruff` (lint+format), `mypy` + `django-stubs`, testy `pytest`, CI (GitHub Actions), hardening produkcyjny `settings.py`, endpoint `/healthz`.

@@ -61,7 +61,7 @@ def ingest_act(short: str, obowiazuje_od: str | None = None) -> tuple[int, int]:
     vecs = embed_documents([c.content_text for c in chunks])
 
     actions = []
-    for c, vec in zip(chunks, vecs):
+    for c, vec in zip(chunks, vecs, strict=False):
         src = c.to_source()
         if eff:
             src["obowiazuje_od"] = eff
@@ -91,7 +91,9 @@ def main() -> None:
     p.add_argument("--setup", action="store_true", help="utwórz indeks + pipeline")
     p.add_argument("--act", help=f"jeden akt: {', '.join(ACTS)}")
     p.add_argument("--all", action="store_true", help="wszystkie akty z config.ACTS")
-    p.add_argument("--od", dest="od", help="obowiazuje_od (YYYY-MM-DD); domyślnie z metadanych t.j.")
+    p.add_argument(
+        "--od", dest="od", help="obowiazuje_od (YYYY-MM-DD); domyślnie z metadanych t.j."
+    )
     args = p.parse_args()
 
     if args.setup:

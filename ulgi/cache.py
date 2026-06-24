@@ -19,13 +19,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import time
-from typing import Any, Optional
+from typing import cast
 
 import numpy as np
 import redis
+
+logger = logging.getLogger(__name__)
 
 CACHE_REDIS_URL = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379/2")
 CACHE_TTL = int(os.getenv("CACHE_TTL_SECONDS", str(7 * 24 * 3600)))
@@ -34,15 +37,45 @@ MAX_ENTRIES = int(os.getenv("CACHE_MAX_ENTRIES", "1000"))
 MIN_ANSWER_LEN = 30  # nie cache'uj śmieciowych/pustych odpowiedzi
 
 _PREFIX = "taxpilot:cache"
-_EXACT = f"{_PREFIX}:exact:"   # + hash → JSON {response, sources}
-_META = f"{_PREFIX}:meta:"     # + sid  → JSON {query, response, sources, sig}
-_VEC = f"{_PREFIX}:vec:"       # + sid  → bytes float32 (wektor znormalizowany)
-_ORDER = f"{_PREFIX}:order"    # zset sid → ts (kolejność wstawiania, do eksmisji)
+_EXACT = f"{_PREFIX}:exact:"  # + hash → JSON {response, sources}
+_META = f"{_PREFIX}:meta:"  # + sid  → JSON {query, response, sources, sig}
+_VEC = f"{_PREFIX}:vec:"  # + sid  → bytes float32 (wektor znormalizowany)
+_ORDER = f"{_PREFIX}:order"  # zset sid → ts (kolejność wstawiania, do eksmisji)
 
 _STOP = {
-    "o", "w", "z", "i", "a", "na", "do", "po", "dla", "od", "ze", "czy", "jak",
-    "co", "to", "się", "nie", "jest", "być", "tego", "tym", "ten", "ta", "te",
-    "ich", "jej", "jego", "jakie", "jaki", "jaka", "które", "który", "która",
+    "o",
+    "w",
+    "z",
+    "i",
+    "a",
+    "na",
+    "do",
+    "po",
+    "dla",
+    "od",
+    "ze",
+    "czy",
+    "jak",
+    "co",
+    "to",
+    "się",
+    "nie",
+    "jest",
+    "być",
+    "tego",
+    "tym",
+    "ten",
+    "ta",
+    "te",
+    "ich",
+    "jej",
+    "jego",
+    "jakie",
+    "jaki",
+    "jaka",
+    "które",
+    "który",
+    "która",
 }
 
 
@@ -52,24 +85,24 @@ def _normalize(query: str) -> str:
     return " ".join(words)
 
 
-def _sig(filters: dict, model: Optional[str]) -> str:
+def _sig(filters: dict, model: str | None) -> str:
     payload = {"f": filters or {}, "m": model or ""}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
-def _exact_key(query: str, filters: dict, model: Optional[str]) -> str:
+def _exact_key(query: str, filters: dict, model: str | None) -> str:
     raw = f"{_normalize(query)}|{_sig(filters, model)}"
     return _EXACT + hashlib.sha256(raw.encode()).hexdigest()
 
 
 class SemanticResponseCache:
     def __init__(self) -> None:
-        self._r: Optional[redis.Redis] = None
+        self._r: redis.Redis | None = None
         self._loaded = False
         self._ids: list[str] = []
         self._sigs: list[str] = []
         self._vecs: list[np.ndarray] = []
-        self._mat: Optional[np.ndarray] = None
+        self._mat: np.ndarray | None = None
         self._dirty = True
 
     # ---- Redis (leniwe połączenie) ----
@@ -92,7 +125,8 @@ class SemanticResponseCache:
         """Wczytuje wektory z Redisa do pamięci procesu (raz)."""
         self._ids, self._sigs, self._vecs = [], [], []
         try:
-            ids = [b.decode() for b in self.r.zrange(_ORDER, 0, -1)]
+            # decode_responses=False → Redis zwraca bajty (stub typuje unię szerzej).
+            ids = [b.decode() for b in cast("list[bytes]", self.r.zrange(_ORDER, 0, -1))]
             if ids:
                 pipe = self.r.pipeline()
                 for sid in ids:
@@ -108,19 +142,19 @@ class SemanticResponseCache:
                     self._ids.append(sid)
                     self._sigs.append(json.loads(meta_b).get("sig", ""))
                     self._vecs.append(np.frombuffer(vec_b, dtype=np.float32))
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — brak/awaria Redisa nie może wywalić odpowiedzi
+            logger.debug("Cache: nie udało się wczytać wektorów z Redisa.", exc_info=True)
         self._dirty = True
         self._loaded = True
 
-    def _matrix(self) -> Optional[np.ndarray]:
+    def _matrix(self) -> np.ndarray | None:
         if self._dirty:
             self._mat = np.vstack(self._vecs) if self._vecs else None
             self._dirty = False
         return self._mat
 
     # ---- API ----
-    def get(self, query: str, filters: dict, model: Optional[str] = None) -> Optional[tuple]:
+    def get(self, query: str, filters: dict, model: str | None = None) -> tuple | None:
         """Zwraca (response, sources, warstwa) albo None."""
         sig = _sig(filters, model)
 
@@ -130,8 +164,8 @@ class SemanticResponseCache:
             if raw:
                 d = json.loads(raw)
                 return d["response"], d["sources"], "exact"
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache: odczyt warstwy exact nieudany.", exc_info=True)
 
         # 2) semantyczny
         if not self._loaded:
@@ -141,7 +175,8 @@ class SemanticResponseCache:
             return None
         try:
             qv = self._embed(query)
-        except Exception:
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache: embedding zapytania nieudany (get).", exc_info=True)
             return None
         sims = mat @ qv
         idx = int(np.argmax(sims))
@@ -158,12 +193,13 @@ class SemanticResponseCache:
                         json.dumps({"response": d["response"], "sources": d["sources"]}),
                     )
                     return d["response"], d["sources"], f"semantic:{sims[idx]:.3f}"
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug("Cache: odczyt warstwy semantycznej nieudany.", exc_info=True)
         return None
 
-    def set(self, query: str, filters: dict, model: Optional[str],
-            response: str, sources: list[dict]) -> None:
+    def set(
+        self, query: str, filters: dict, model: str | None, response: str, sources: list[dict]
+    ) -> None:
         if not response or len(response) < MIN_ANSWER_LEN:
             return
         sig = _sig(filters, model)
@@ -171,7 +207,8 @@ class SemanticResponseCache:
 
         try:
             qv = self._embed(query)
-        except Exception:
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache: embedding zapytania nieudany (set).", exc_info=True)
             return
 
         try:
@@ -181,12 +218,14 @@ class SemanticResponseCache:
                 json.dumps({"response": response, "sources": sources}),
             )
             self.r.setex(
-                _META + sid, CACHE_TTL,
+                _META + sid,
+                CACHE_TTL,
                 json.dumps({"query": query, "response": response, "sources": sources, "sig": sig}),
             )
             self.r.setex(_VEC + sid, CACHE_TTL, qv.tobytes())
             self.r.zadd(_ORDER, {sid: time.time()})
-        except Exception:
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache: zapis do Redisa nieudany.", exc_info=True)
             return
 
         # pamięć procesu
@@ -206,23 +245,28 @@ class SemanticResponseCache:
             over = self.r.zcard(_ORDER) - MAX_ENTRIES
             if over <= 0:
                 return
-            oldest = [b.decode() for b in self.r.zrange(_ORDER, 0, over - 1)]
+            oldest = [b.decode() for b in cast("list[bytes]", self.r.zrange(_ORDER, 0, over - 1))]
             pipe = self.r.pipeline()
             for sid in oldest:
                 pipe.delete(_META + sid, _VEC + sid)
                 pipe.zrem(_ORDER, sid)
             pipe.execute()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache: eksmisja najstarszych wpisów nieudana.", exc_info=True)
         # najprościej: wymuś przeładowanie indeksu w pamięci przy następnym get
         self._loaded = False
 
     # ---- pomocnicze (debug / admin) ----
     def stats(self) -> dict:
         try:
-            return {"entries": self.r.zcard(_ORDER), "in_memory": len(self._ids),
-                    "threshold": SEM_THRESHOLD, "max": MAX_ENTRIES}
-        except Exception:
+            return {
+                "entries": self.r.zcard(_ORDER),
+                "in_memory": len(self._ids),
+                "threshold": SEM_THRESHOLD,
+                "max": MAX_ENTRIES,
+            }
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache: odczyt statystyk nieudany.", exc_info=True)
             return {"entries": 0, "in_memory": len(self._ids)}
 
     def clear(self) -> int:
@@ -231,14 +275,14 @@ class SemanticResponseCache:
             keys = list(self.r.scan_iter(match=f"{_PREFIX}:*"))
             if keys:
                 n = self.r.delete(*keys)
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache: czyszczenie nieudane.", exc_info=True)
         self._ids, self._sigs, self._vecs, self._mat = [], [], [], None
         self._loaded, self._dirty = False, True
         return n
 
 
-_CACHE: Optional[SemanticResponseCache] = None
+_CACHE: SemanticResponseCache | None = None
 
 
 def get_cache() -> SemanticResponseCache:

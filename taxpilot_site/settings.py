@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 try:
     from dotenv import load_dotenv
 
@@ -20,23 +22,43 @@ except ImportError:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-change-me")
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+# Secure-by-default: produkcja, chyba że jawnie DJANGO_DEBUG=1 (lokalny dev).
+# Pamiętaj o ustawieniu DJANGO_DEBUG=1 w .env do pracy lokalnej (runserver).
+DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
+
+_INSECURE_KEY = "dev-insecure-change-me"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", _INSECURE_KEY)
+if not DEBUG and SECRET_KEY == _INSECURE_KEY:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY musi być ustawiony w produkcji (DEBUG=0). "
+        "Wygeneruj losowy klucz i wpisz go do .env."
+    )
 ALLOWED_HOSTS = [
     h.strip()
     for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if h.strip()
 ]
 CSRF_TRUSTED_ORIGINS = [
-    o.strip()
-    for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
-    if o.strip()
+    o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
 ]
 
 # Za Cloudflare + nginx (TLS terminowany wyżej) Django musi rozpoznać HTTPS po
 # nagłówku, inaczej request.is_secure() = False i CSRF na POST-ach (origin https)
 # leci 403. nginx przekazuje oryginalny X-Forwarded-Proto z Cloudflare.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# ── Hardening produkcyjny (tylko gdy DEBUG=0) ─────────────────────
+# TLS jest terminowany na Cloudflare/nginx, dlatego ciasteczka oznaczamy jako
+# Secure i włączamy HSTS. SSL-redirect jest opcjonalny (zwykle robi to już
+# Cloudflare) — gdyby był potrzebny, włącz DJANGO_SECURE_SSL_REDIRECT=1.
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "0") == "1"
+    SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", str(60 * 60 * 24 * 30)))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -95,7 +117,12 @@ DATABASES = {
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 60 * 60  # ingest może trwać
+# Limity per ZADANIE. Po rozbiciu odświeżania na zadania per akt jednostką jest
+# pojedynczy akt — na CPU duży akt (embedding stelli) może trwać długo, stąd
+# hojny limit. Miękki rzuca SoftTimeLimitExceeded (zadanie zdąży sprzątnąć
+# IngestJob), twardy ubija dopiero potem.
+CELERY_TASK_TIME_LIMIT = 2 * 60 * 60  # twardy: 2 h
+CELERY_TASK_SOFT_TIME_LIMIT = 105 * 60  # miękki: 1 h 45
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
@@ -128,3 +155,34 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ── Logowanie ─────────────────────────────────────────────────────
+# Jeden handler na konsolę (przechwytywany przez systemd/journalctl w produkcji).
+# Poziom sterowany zmienną DJANGO_LOG_LEVEL; rdzeń RAG, ingest i cache logują
+# pod własnymi loggerami (search, ingest_core, ulgi.cache, ...).
+LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "[{asctime}] {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        },
+    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+    "loggers": {
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        # Moduły aplikacji i rdzenia RAG.
+        "ulgi": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "search": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "qualification": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "opensearch_schema": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+    },
+}

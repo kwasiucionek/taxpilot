@@ -10,7 +10,6 @@ answer()    — buduje kontekst z cytatami i generuje odpowiedź na Ollama;
 
 from __future__ import annotations
 
-import json
 import logging
 
 import requests
@@ -46,9 +45,7 @@ def retrieve(
 ) -> list[dict]:
     client = get_client()
     vector = embed_query(query)
-    filters = build_filters(
-        akt=akt, ulga=ulga, source_types=source_types, on_date=on_date
-    )
+    filters = build_filters(akt=akt, ulga=ulga, source_types=source_types, on_date=on_date)
     body = hybrid_body(query, vector, k, filters or None, use_hybrid=use_hybrid)
 
     params = {}
@@ -87,11 +84,33 @@ def _build_context(docs: list[dict]) -> str:
 
 
 def _ollama_headers() -> dict[str, str]:
-    return (
-        {"Authorization": f"Bearer {OLLAMA_CLOUD_API_KEY}"}
-        if OLLAMA_CLOUD_API_KEY
-        else {}
-    )
+    return {"Authorization": f"Bearer {OLLAMA_CLOUD_API_KEY}"} if OLLAMA_CLOUD_API_KEY else {}
+
+
+def build_chat_payload(
+    query: str,
+    docs: list[dict],
+    *,
+    model: str | None = None,
+    stream: bool = False,
+) -> dict:
+    """Buduje payload czatu Ollamy (system + pytanie + kontekst).
+
+    Jedno źródło prawdy dla wariantu blokującego (`answer`) i strumieniowego
+    (widok SSE), żeby prompt i kontekst nie rozjechały się między nimi.
+    """
+    context = _build_context(docs)
+    return {
+        "model": model or DEFAULT_OLLAMA_MODEL,
+        "messages": [
+            {"role": "system", "content": _SYSTEM},
+            {
+                "role": "user",
+                "content": f"Pytanie: {query}\n\nKontekst (podstawy prawne):\n{context}",
+            },
+        ],
+        "stream": stream,
+    }
 
 
 def answer(
@@ -109,18 +128,7 @@ def answer(
             "sources": [],
         }
 
-    context = _build_context(docs)
-    payload = {
-        "model": model or DEFAULT_OLLAMA_MODEL,
-        "messages": [
-            {"role": "system", "content": _SYSTEM},
-            {
-                "role": "user",
-                "content": f"Pytanie: {query}\n\nKontekst (podstawy prawne):\n{context}",
-            },
-        ],
-        "stream": False,
-    }
+    payload = build_chat_payload(query, docs, model=model, stream=False)
     r = requests.post(
         f"{OLLAMA_URL}/api/chat",
         headers=_ollama_headers(),

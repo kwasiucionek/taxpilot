@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 import requests
-from django.http import HttpResponseBadRequest, StreamingHttpResponse
+from django.http import HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
@@ -66,9 +67,34 @@ def _source_view(d: dict) -> dict:
     }
 
 
+# ── Health-check ───────────────────────────────────────────────────────────
+def healthz(request):
+    """Lekki health-check dla nginx / systemd / monitoringu.
+
+    Liveness zawsze 200, jeśli proces odpowiada. Readiness sprawdza tylko bazę
+    (system of record) — OpenSearch/Redis/Ollama celowo pomijamy, by sonda nie
+    robiła wywołań sieciowych przy każdym pingu (strona degraduje bez nich).
+    """
+    from django.db import connection
+
+    checks: dict[str, str] = {}
+    healthy = True
+    try:
+        connection.ensure_connection()
+        checks["db"] = "ok"
+    except Exception as e:  # noqa: BLE001
+        checks["db"] = f"error: {e}"
+        healthy = False
+
+    return JsonResponse(
+        {"status": "ok" if healthy else "degraded", "checks": checks},
+        status=200 if healthy else 503,
+    )
+
+
 # ── Strona główna ─────────────────────────────────────────────────────────
 def chat(request):
-    ctx = {"corpus_note": "korpus: CIT · PIT · ORD"}
+    ctx: dict[str, Any] = {"corpus_note": "korpus: CIT · PIT · ORD"}
     # Pieczęć „stan prawny" z ostatniego udanego ingestu (degraduje, gdy brak DB/danych).
     try:
         akt = (
@@ -79,9 +105,7 @@ def chat(request):
         )
         if akt:
             job = (
-                IngestJob.objects.filter(akt=akt, status="success")
-                .order_by("-finished_at")
-                .first()
+                IngestJob.objects.filter(akt=akt, status="success").order_by("-finished_at").first()
             )
             d = job.obowiazuje_od if job else None
             ctx["stan_prawny"] = d.strftime("%d.%m.%Y") if d else None
@@ -107,20 +131,10 @@ def _sse(event: str, data: dict) -> str:
 
 def _stream_ollama(query: str, docs: list[dict], model: str | None = None):
     """Strumień tokenów odpowiedzi z Ollamy (reużywa promptu i kontekstu z search)."""
-    from config import DEFAULT_OLLAMA_MODEL, OLLAMA_URL
-    from search import _SYSTEM, _build_context, _ollama_headers
+    from config import OLLAMA_URL
+    from search import _ollama_headers, build_chat_payload
 
-    payload = {
-        "model": model or DEFAULT_OLLAMA_MODEL,
-        "messages": [
-            {"role": "system", "content": _SYSTEM},
-            {
-                "role": "user",
-                "content": f"Pytanie: {query}\n\nKontekst (podstawy prawne):\n{_build_context(docs)}",
-            },
-        ],
-        "stream": True,
-    }
+    payload = build_chat_payload(query, docs, model=model, stream=True)
     with requests.post(
         f"{OLLAMA_URL}/api/chat",
         headers=_ollama_headers(),
@@ -158,7 +172,7 @@ def ask(request):
     ulga = (request.POST.get("ulga") or "").strip() or None
     if not q:
         return HttpResponseBadRequest("puste pytanie")
-    filters = {"ulga": ulga} if ulga else {}
+    filters: dict[str, Any] = {"ulga": ulga} if ulga else {}
 
     if not request.session.session_key:
         request.session.create()
@@ -244,8 +258,7 @@ def qualify(request):
 
     ocena = out.get("ocena", {})
     oceny = [
-        {**o, "cls": VERDICT_CLS.get(o.get("werdykt", ""), "brak")}
-        for o in ocena.get("oceny", [])
+        {**o, "cls": VERDICT_CLS.get(o.get("werdykt", ""), "brak")} for o in ocena.get("oceny", [])
     ]
     try:
         QualificationQuery.objects.create(opis=opis, ulgi=ulgi or [], result=ocena)

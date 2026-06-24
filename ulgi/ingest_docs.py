@@ -35,7 +35,7 @@ def _store_and_index(akt, chunks, od_date, od_str: str) -> tuple[int, int]:
 
     rows: list = []
     actions: list[dict] = []
-    for c, vec in zip(chunks, vecs):
+    for c, vec in zip(chunks, vecs, strict=False):
         src = c.to_source()
         if od_str:
             src["obowiazuje_od"] = od_str
@@ -87,9 +87,9 @@ def ingest_objasnienie_to_stores(kod: str) -> dict:
     import requests
     from django.utils import timezone
 
+    from chunking import chunk_document
     from config import OBJASNIENIA, SOURCE_OBJASNIENIA
     from eli_client import pdf_to_text
-    from chunking import chunk_document
     from opensearch_schema import ensure_hybrid_pipeline, ensure_index, get_client
 
     from .models import IngestJob
@@ -113,8 +113,12 @@ def ingest_objasnienie_to_stores(kod: str) -> dict:
             raise ValueError("Pusty tekst po ekstrakcji PDF (sprawdź URL / format).")
 
         chunks = chunk_document(
-            text, kod=kod, citation=spec["citation"], ulga=ulga,
-            source_type=SOURCE_OBJASNIENIA, zrodlo_url=url,
+            text,
+            kod=kod,
+            citation=spec["citation"],
+            ulga=ulga,
+            source_type=SOURCE_OBJASNIENIA,
+            zrodlo_url=url,
         )
         if not chunks:
             raise ValueError("Brak chunków po podziale dokumentu.")
@@ -122,21 +126,25 @@ def ingest_objasnienie_to_stores(kod: str) -> dict:
         ok, errors = _store_and_index(akt, chunks, od_date, data_str)
         akt.last_ingested_at = timezone.now()
         akt.save()
-        job.status = "success"; job.chunks_indexed = ok
-        job.finished_at = timezone.now(); job.save()
+        job.status = "success"
+        job.chunks_indexed = ok
+        job.finished_at = timezone.now()
+        job.save()
         return {"objasnienie": kod, "url": url, "ok": ok, "errors": errors}
     except Exception as e:  # noqa: BLE001
-        job.status = "failed"; job.error = str(e)[:2000]
-        job.finished_at = timezone.now(); job.save()
+        job.status = "failed"
+        job.error = str(e)[:2000]
+        job.finished_at = timezone.now()
+        job.save()
         raise
 
 
 def ingest_interpretacja_to_stores(info_id: str, ulga: str = "") -> dict:
     from django.utils import timezone
 
+    from chunking import chunk_document
     from config import SOURCE_INTERPRETACJA
     from eli_client import html_to_text
-    from chunking import chunk_document
     from opensearch_schema import ensure_hybrid_pipeline, ensure_index, get_client
 
     from .kis_client import fetch_interpretacja
@@ -160,8 +168,12 @@ def ingest_interpretacja_to_stores(info_id: str, ulga: str = "") -> dict:
     job = IngestJob.objects.create(akt=akt, status="running", obowiazuje_od=od_date)
     try:
         chunks = chunk_document(
-            text, kod=kod, citation=citation, ulga=ulga,
-            source_type=SOURCE_INTERPRETACJA, zrodlo_url=url,
+            text,
+            kod=kod,
+            citation=citation,
+            ulga=ulga,
+            source_type=SOURCE_INTERPRETACJA,
+            zrodlo_url=url,
         )
         if not chunks:
             raise ValueError("Brak chunków po podziale interpretacji.")
@@ -169,10 +181,14 @@ def ingest_interpretacja_to_stores(info_id: str, ulga: str = "") -> dict:
         ok, errors = _store_and_index(akt, chunks, od_date, meta["data_wyd"])
         akt.last_ingested_at = timezone.now()
         akt.save()
-        job.status = "success"; job.chunks_indexed = ok
-        job.finished_at = timezone.now(); job.save()
+        job.status = "success"
+        job.chunks_indexed = ok
+        job.finished_at = timezone.now()
+        job.save()
         return {"interpretacja": syg, "id": meta["id"], "ok": ok, "errors": errors}
     except Exception as e:  # noqa: BLE001
-        job.status = "failed"; job.error = str(e)[:2000]
-        job.finished_at = timezone.now(); job.save()
+        job.status = "failed"
+        job.error = str(e)[:2000]
+        job.finished_at = timezone.now()
+        job.save()
         raise

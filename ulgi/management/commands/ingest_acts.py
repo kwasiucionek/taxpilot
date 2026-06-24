@@ -20,8 +20,15 @@ class Command(BaseCommand):
         parser.add_argument("--all", action="store_true", help="wszystkie akty z config.ACTS")
         parser.add_argument("--od", dest="od", help="obowiazuje_od (YYYY-MM-DD)")
         parser.add_argument(
-            "--async", action="store_true", dest="run_async",
+            "--async",
+            action="store_true",
+            dest="run_async",
             help="uruchom przez Celery zamiast synchronicznie",
+        )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="wymuś pełne przeliczenie embeddingów (pomija inkrementalny skip po hashu)",
         )
 
     def handle(self, *args, **opts):
@@ -35,11 +42,14 @@ class Command(BaseCommand):
             if opts["run_async"]:
                 from ulgi.tasks import ingest_act_task
 
-                res = ingest_act_task.delay(kod, opts["od"])
+                res = ingest_act_task.delay(kod, opts["od"], force=opts["force"])
                 self.stdout.write(self.style.SUCCESS(f"{kod}: zlecono Celery (task {res.id})"))
             else:
                 self.stdout.write(f"Ingest {kod}...")
-                out = ingest_act_to_stores(kod, obowiazuje_od=opts["od"])
+                out = ingest_act_to_stores(kod, obowiazuje_od=opts["od"], force=opts["force"])
                 self.stdout.write(
-                    self.style.SUCCESS(f"{kod}: ok={out['ok']}, błędy={out['errors']}")
+                    self.style.SUCCESS(
+                        f"{kod}: policzono={out['embedded']}, pominięto={out['skipped']}, "
+                        f"usunięto={out['removed']}, błędy={out['errors']}"
+                    )
                 )

@@ -70,12 +70,16 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--ids", help="ID informacji po przecinku, np. 604348,639490")
-        parser.add_argument("--csv", help="eksport EUREKA (CSV/XLSX) — ID wyłuskiwane automatycznie")
+        parser.add_argument(
+            "--csv", help="eksport EUREKA (CSV/XLSX) — ID wyłuskiwane automatycznie"
+        )
         parser.add_argument(
             "--przepisy",
             help="ID przepisów (PRZEPISY) po przecinku — wyszukiwanie w EUREKA",
         )
-        parser.add_argument("--limit", type=int, default=50, help="max interpretacji z wyszukiwania")
+        parser.add_argument(
+            "--limit", type=int, default=50, help="max interpretacji z wyszukiwania"
+        )
         parser.add_argument("--od-daty", dest="od_daty", help="data wydania od (YYYY-MM-DD)")
         parser.add_argument("--do-daty", dest="do_daty", help="data wydania do (YYYY-MM-DD)")
         parser.add_argument(
@@ -141,7 +145,9 @@ class Command(BaseCommand):
             )
 
         if opts["dry_run"]:
-            self.stdout.write(self.style.WARNING(f"--dry-run: {len(ids)} ID, pomijam indeksowanie."))
+            self.stdout.write(
+                self.style.WARNING(f"--dry-run: {len(ids)} ID, pomijam indeksowanie.")
+            )
             return
 
         ok_n = 0
@@ -150,7 +156,9 @@ class Command(BaseCommand):
             try:
                 out = ingest_interpretacja_to_stores(info_id, ulga=opts["ulga"])
                 self.stdout.write(
-                    self.style.SUCCESS(f"  {out['interpretacja']}: ok={out['ok']}, błędy={out['errors']}")
+                    self.style.SUCCESS(
+                        f"  {out['interpretacja']}: ok={out['ok']}, błędy={out['errors']}"
+                    )
                 )
                 ok_n += 1
             except Exception as e:  # noqa: BLE001

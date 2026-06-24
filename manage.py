@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Django management entry point dla TaxPilot."""
+
 import os
 import sys
 
@@ -9,9 +10,7 @@ def main():
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
-        raise ImportError(
-            "Nie znaleziono Django. Aktywuj venv i zainstaluj zależności."
-        ) from exc
+        raise ImportError("Nie znaleziono Django. Aktywuj venv i zainstaluj zależności.") from exc
     execute_from_command_line(sys.argv)
 
 

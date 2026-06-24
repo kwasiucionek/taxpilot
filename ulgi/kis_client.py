@@ -10,12 +10,14 @@ datę wydania (DT_WYD), status, kategorię i pełną treść HTML (TRESC_INTERES
 
 from __future__ import annotations
 
+from typing import Any
+
 import requests
 from requests.adapters import HTTPAdapter
 
 try:
     from urllib3.util.retry import Retry
-except Exception:  # pragma: no cover
+except Exception:  # noqa: BLE001  # pragma: no cover
     from requests.packages.urllib3.util.retry import Retry  # type: ignore
 
 EUREKA_API = "https://eureka.mf.gov.pl/api/public/v1"
@@ -82,8 +84,12 @@ def fetch_interpretacja(info_id: int | str, timeout: int = DEFAULT_TIMEOUT) -> d
 
 
 _SEARCH_COLUMNS = [
-    "ID_INFORMACJI", "SYG", "DT_WYD", "TEZA",
-    "STATUS_INFORMACJI", "KATEGORIA_INFORMACJI",
+    "ID_INFORMACJI",
+    "SYG",
+    "DT_WYD",
+    "TEZA",
+    "STATUS_INFORMACJI",
+    "KATEGORIA_INFORMACJI",
 ]
 
 
@@ -107,10 +113,10 @@ def _search_row(row: dict) -> dict:
 def search_interpretacje(
     przepisy_ids,
     *,
-    kategoria_id: int | None = 1,    # KATEGORIA_INFORMACJI: 1 = Interpretacja indywidualna
-    status_id: int | None = 27,      # STATUS_INFORMACJI: 27 = Aktualna
-    od_daty: str | None = None,      # DT_WYD_start, format YYYY-MM-DD
-    do_daty: str | None = None,      # DT_WYD_end, format YYYY-MM-DD
+    kategoria_id: int | None = 1,  # KATEGORIA_INFORMACJI: 1 = Interpretacja indywidualna
+    status_id: int | None = 27,  # STATUS_INFORMACJI: 27 = Aktualna
+    od_daty: str | None = None,  # DT_WYD_start, format YYYY-MM-DD
+    do_daty: str | None = None,  # DT_WYD_end, format YYYY-MM-DD
     limit: int = 50,
     page_size: int = 25,
     max_pages: int = 40,
@@ -136,10 +142,16 @@ def search_interpretacje(
     body = {"filter": flt, "columns": _SEARCH_COLUMNS}
     collected: list[dict] = []
     for page in range(max_pages):
-        params = {"size": page_size, "page": page, "sort": "parametryPozycjonowania,asc"}
+        params: dict[str, Any] = {
+            "size": page_size,
+            "page": page,
+            "sort": "parametryPozycjonowania,asc",
+        }
         r = _SESSION.post(
             f"{EUREKA_API}/wyszukiwarka/informacje/",
-            params=params, json=body, timeout=timeout,
+            params=params,
+            json=body,
+            timeout=timeout,
         )
         r.raise_for_status()
         data = r.json()

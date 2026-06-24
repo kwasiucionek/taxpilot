@@ -16,7 +16,7 @@ Uruchomienie:
 
 import json
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 import requests
 import streamlit as st
@@ -86,7 +86,7 @@ def render_onboarding():
 # ===================== RETRIEVAL (OpenSearch) =====================
 
 
-def run_retrieve(query: str, filters: dict, k: int) -> List[Dict[str, Any]]:
+def run_retrieve(query: str, filters: dict, k: int) -> list[dict[str, Any]]:
     """Hybrydowe wyszukiwanie w OpenSearch z filtrami z sidebaru."""
     from search import retrieve
 
@@ -107,7 +107,7 @@ def run_retrieve(query: str, filters: dict, k: int) -> List[Dict[str, Any]]:
     return docs
 
 
-def format_tool_results(query: str, docs: List[Dict]) -> str:
+def format_tool_results(query: str, docs: list[dict]) -> str:
     """Formatuje wyniki jako kontekst dla modelu (z naciskiem na cytowanie)."""
     if not docs:
         return (
@@ -178,17 +178,27 @@ def parse_tool_calls_from_text(text: str):
     for m in re.findall(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", text, re.DOTALL):
         try:
             data = json.loads(m)
-            calls.append({"function": {"name": data.get("name"),
-                                       "arguments": json.dumps(data.get("arguments", {}))}})
+            calls.append(
+                {
+                    "function": {
+                        "name": data.get("name"),
+                        "arguments": json.dumps(data.get("arguments", {})),
+                    }
+                }
+            )
         except json.JSONDecodeError:
             pass
     return calls or None
 
 
 def agentic_answer(
-    query: str, model: str, filters: dict, k: int,
-    chat_history: List[Dict[str, str]], status=None,
-) -> tuple[str, List[Dict]]:
+    query: str,
+    model: str,
+    filters: dict,
+    k: int,
+    chat_history: list[dict[str, str]],
+    status=None,
+) -> tuple[str, list[dict]]:
     """Pętla agentic z tool-callingiem na Ollama Cloud, streaming do Streamlit."""
     messages = [{"role": "system", "content": _SYSTEM}]
     if chat_history:
@@ -199,25 +209,29 @@ def agentic_answer(
             messages.append({"role": m["role"], "content": c})
     messages.append({"role": "user", "content": query})
 
-    all_sources: List[Dict] = []
+    all_sources: list[dict] = []
     final = ""
     url = f"{OLLAMA_URL}/api/chat"
 
     for iteration in range(3):
         payload = {
-            "model": model, "messages": messages, "tools": _TOOLS,
-            "stream": True, "options": {"temperature": 0.2, "num_ctx": 16384},
+            "model": model,
+            "messages": messages,
+            "tools": _TOOLS,
+            "stream": True,
+            "options": {"temperature": 0.2, "num_ctx": 16384},
         }
         try:
-            r = requests.post(url, json=payload, headers=_ollama_headers(),
-                              stream=True, timeout=300)
+            r = requests.post(
+                url, json=payload, headers=_ollama_headers(), stream=True, timeout=300
+            )
             r.raise_for_status()
         except Exception as e:  # noqa: BLE001
             st.error(f"Błąd Ollama: {e}")
             break
 
         content = ""
-        tool_calls: List[Dict] = []
+        tool_calls: list[dict] = []
         placeholder = st.empty()
         for line in r.iter_lines():
             if not line:
@@ -277,7 +291,7 @@ def agentic_answer(
 
     if not final and all_sources:
         final = "Na podstawie znalezionych przepisów:\n\n" + "\n".join(
-            f"- **{d.get('citation','?')}**: {d.get('content_text','')[:200]}..."
+            f"- **{d.get('citation', '?')}**: {d.get('content_text', '')[:200]}..."
             for d in all_sources[:5]
         )
     return final, all_sources
@@ -286,7 +300,7 @@ def agentic_answer(
 # ===================== PANEL ŹRÓDEŁ =====================
 
 
-def render_sources_panel(docs: List[Dict[str, Any]]):
+def render_sources_panel(docs: list[dict[str, Any]]):
     if not docs:
         return
     seen, unique = set(), []
@@ -327,8 +341,7 @@ def render_sidebar() -> dict:
         st.markdown("---")
         st.subheader("🎯 Ulga")
         ulga_opts = [("Wszystkie", None)] + [(v["name"], k) for k, v in ULGI.items()]
-        ulga = st.selectbox("Filtruj po uldze", ulga_opts,
-                            format_func=lambda x: x[0])[1]
+        ulga = st.selectbox("Filtruj po uldze", ulga_opts, format_func=lambda x: x[0])[1]
 
         st.subheader("📚 Akt prawny")
         akt_opts = [("Wszystkie", None)] + [(v["title"], k) for k, v in ACTS.items()]
@@ -336,14 +349,14 @@ def render_sidebar() -> dict:
 
         st.subheader("📄 Typ źródła")
         src_all = [SOURCE_USTAWA, SOURCE_OBJASNIENIA, SOURCE_INTERPRETACJA, SOURCE_ORZECZENIE]
-        src = st.multiselect("Ogranicz do", src_all,
-                             format_func=lambda s: SOURCE_LABELS.get(s, s))
+        src = st.multiselect("Ogranicz do", src_all, format_func=lambda s: SOURCE_LABELS.get(s, s))
 
         st.subheader("📅 Stan prawny na dzień")
         use_date = st.checkbox("Filtruj po dacie obowiązywania")
         on_date = None
         if use_date:
             import datetime
+
             d = st.date_input("Dzień", value=datetime.date.today())
             on_date = d.isoformat()
 
@@ -359,18 +372,20 @@ def render_sidebar() -> dict:
 
     return {
         "model": model,
-        "filters": {"ulga": ulga, "akt": akt,
-                    "source_types": src or None, "on_date": on_date},
+        "filters": {"ulga": ulga, "akt": akt, "source_types": src or None, "on_date": on_date},
         "top_k": top_k,
         "chat_turns": chat_turns,
     }
 
 
-def build_chat_history(max_turns: int) -> List[Dict[str, str]]:
+def build_chat_history(max_turns: int) -> list[dict[str, str]]:
     msgs = st.session_state.get("messages", [])
-    hist = [{"role": m["role"], "content": m["content"]}
-            for m in msgs if m.get("role") in ("user", "assistant") and m.get("content")]
-    return hist[-max_turns * 2:] if max_turns else []
+    hist = [
+        {"role": m["role"], "content": m["content"]}
+        for m in msgs
+        if m.get("role") in ("user", "assistant") and m.get("content")
+    ]
+    return hist[-max_turns * 2 :] if max_turns else []
 
 
 # ===================== TRYB: CZAT =====================
@@ -378,12 +393,14 @@ def build_chat_history(max_turns: int) -> List[Dict[str, str]]:
 
 def view_chat(cfg: dict):
     if "messages" not in st.session_state:
-        st.session_state.messages = [{
-            "role": "assistant",
-            "content": "Cześć! Jestem TaxPilot — pomagam w temacie ulg B+R, IP Box i kosztów "
-                       "autorskich, opierając się na przepisach, objaśnieniach i interpretacjach. "
-                       "Zadaj pytanie. 👇",
-        }]
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": "Cześć! Jestem TaxPilot — pomagam w temacie ulg B+R, IP Box i kosztów "
+                "autorskich, opierając się na przepisach, objaśnieniach i interpretacjach. "
+                "Zadaj pytanie. 👇",
+            }
+        ]
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
@@ -411,9 +428,7 @@ def view_chat(cfg: dict):
         status.empty()
         render_sources_panel(sources)
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": response, "sources": sources}
-    )
+    st.session_state.messages.append({"role": "assistant", "content": response, "sources": sources})
 
 
 # ===================== TRYB: KWALIFIKACJA =====================
@@ -426,22 +441,36 @@ def view_qualify(cfg: dict):
         "kwalifikację do ulgi B+R i IP Box z podstawą prawną. To wsparcie informacyjne, "
         "nie wiążąca porada podatkowa."
     )
-    opis = st.text_area("Opis działalności", height=160,
-                        placeholder="Np. Tworzymy autorskie oprogramowanie...")
-    ulgi_sel = st.multiselect("Rozpatrywane ulgi", ["BR", "IPBOX"], default=["BR", "IPBOX"],
-                              format_func=lambda c: ULGI[c]["name"])
+    opis = st.text_area(
+        "Opis działalności", height=160, placeholder="Np. Tworzymy autorskie oprogramowanie..."
+    )
+    ulgi_sel = st.multiselect(
+        "Rozpatrywane ulgi",
+        ["BR", "IPBOX"],
+        default=["BR", "IPBOX"],
+        format_func=lambda c: ULGI[c]["name"],
+    )
 
     if st.button("Oceń kwalifikację", type="primary", disabled=not opis.strip()):
         from qualification import assess
+
         with st.spinner("🧭 Oceniam na podstawie przepisów i objaśnień..."):
-            out = assess(opis, ulgi=ulgi_sel or None,
-                         on_date=cfg["filters"].get("on_date"), model=cfg["model"])
+            out = assess(
+                opis,
+                ulgi=ulgi_sel or None,
+                on_date=cfg["filters"].get("on_date"),
+                model=cfg["model"],
+            )
         ocena = out.get("ocena", {})
         for o in ocena.get("oceny", []):
             werdykt = o.get("werdykt", "?")
-            color = {"kwalifikuje": "🟢", "częściowo": "🟡",
-                     "nie kwalifikuje": "🔴", "za mało danych": "⚪"}.get(werdykt, "⚪")
-            st.markdown(f"### {color} {o.get('ulga','?')} — {werdykt}")
+            color = {
+                "kwalifikuje": "🟢",
+                "częściowo": "🟡",
+                "nie kwalifikuje": "🔴",
+                "za mało danych": "⚪",
+            }.get(werdykt, "⚪")
+            st.markdown(f"### {color} {o.get('ulga', '?')} — {werdykt}")
             st.write(o.get("uzasadnienie", ""))
             if o.get("podstawa_prawna"):
                 st.markdown("**Podstawa prawna:** " + "; ".join(o["podstawa_prawna"]))
@@ -452,11 +481,17 @@ def view_qualify(cfg: dict):
             st.markdown("---")
         if ocena.get("zastrzezenie"):
             st.info(ocena["zastrzezenie"])
-        render_sources_panel([
-            {"citation": s.get("citation"), "ulga": s.get("ulga"),
-             "_score": s.get("score"), "content_text": ""}
-            for s in out.get("sources", [])
-        ])
+        render_sources_panel(
+            [
+                {
+                    "citation": s.get("citation"),
+                    "ulga": s.get("ulga"),
+                    "_score": s.get("score"),
+                    "content_text": "",
+                }
+                for s in out.get("sources", [])
+            ]
+        )
 
 
 # ===================== MAIN =====================
@@ -464,8 +499,10 @@ def view_qualify(cfg: dict):
 
 def main():
     st.title("🧭 TaxPilot")
-    st.markdown("**Asystent ulg podatkowych** — B+R · IP Box · koszty autorskie | "
-                "oparty na przepisach, objaśnieniach i interpretacjach")
+    st.markdown(
+        "**Asystent ulg podatkowych** — B+R · IP Box · koszty autorskie | "
+        "oparty na przepisach, objaśnieniach i interpretacjach"
+    )
 
     try:
         warm_embedder()

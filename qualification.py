@@ -123,9 +123,7 @@ def assess(
         "stream": False,
         "format": "json",
     }
-    r = requests.post(
-        f"{OLLAMA_URL}/api/chat", headers=_headers(), json=payload, timeout=180
-    )
+    r = requests.post(f"{OLLAMA_URL}/api/chat", headers=_headers(), json=payload, timeout=180)
     r.raise_for_status()
     raw = r.json().get("message", {}).get("content", "{}")
 

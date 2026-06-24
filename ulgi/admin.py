@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Akt, Chunk, ChatMessage, ChatSession, IngestJob, QualificationQuery
+from .models import Akt, ChatMessage, ChatSession, Chunk, IngestJob, QualificationQuery
 
 
 @admin.register(Akt)

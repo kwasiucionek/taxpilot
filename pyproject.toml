@@ -1,0 +1,64 @@
+[project]
+name = "taxpilot"
+version = "0.1.0"
+description = "TaxPilot — asystent ulg podatkowych (RAG nad polskim prawem podatkowym)"
+requires-python = ">=3.10"
+
+# ── Ruff: linter + formatter ──────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [".venv", "migrations", "staticfiles"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort (sortowanie importów)
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "BLE",  # flake8-blind-except (świadome `except Exception` → `# noqa: BLE001`)
+    "C4",   # flake8-comprehensions
+]
+ignore = [
+    "E501",  # długość linii pilnuje formatter, nie linter
+    "B008",  # wywołania w argumentach domyślnych (Django/DRF idiom)
+    "C408",  # dict(...) jako kwargs (np. update_or_create(defaults=dict(...))) — czytelny idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Skrypty CLI (`if __name__ == "__main__"`) i komendy zarządzające bywają luźniejsze.
+"tests/*" = ["B011"]
+
+# ── Pytest / pytest-django ────────────────────────────────────────
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "taxpilot_site.settings"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+pythonpath = ["."]
+# Domyślnie testy nie dotykają sieci/zewnętrznych usług; te wymagające bazy
+# oznaczamy `@pytest.mark.django_db`.
+addopts = "-ra"
+
+# ── Mypy + django-stubs ─────────────────────────────────
+[tool.mypy]
+python_version = "3.10"
+plugins = ["mypy_django_plugin.main"]
+# Biblioteki bez stubów (opensearchpy, sentence_transformers, pdfplumber, ...)
+# nie mają typów — nie zgłaszamy braków importu jako błędów.
+ignore_missing_imports = true
+warn_redundant_casts = true
+no_implicit_optional = true
+# Sprawdzamy również ciała funkcji bez adnotacji — łapie realne błędy, nie zmuszając
+# do anotowania wszystkiego naraz.
+check_untyped_defs = true
+exclude = '(^|/)(migrations|\.venv|staticfiles)/'
+
+[tool.django-stubs]
+django_settings_module = "taxpilot_site.settings"
+
+# Migracje i testy są dynamiczne — luzujemy, by mypy skupił się na kodzie aplikacji.
+[[tool.mypy.overrides]]
+module = ["*.migrations.*", "tests.*"]
+ignore_errors = true

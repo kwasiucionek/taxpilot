@@ -11,8 +11,7 @@ from __future__ import annotations
 from config import EMBED_BATCH_SIZE, EMBED_MAX_SEQ, EMBED_MODEL
 
 _QUERY_PREFIX = (
-    "Instruct: Given a web search query, retrieve relevant passages "
-    "that answer the query.\nQuery: "
+    "Instruct: Given a web search query, retrieve relevant passages that answer the query.\nQuery: "
 )
 
 _loaded_embedder = None
@@ -87,7 +86,7 @@ def get_embedder():
     if device == "cuda":
         try:
             model = model.half()
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
 
     _loaded_embedder = model
@@ -95,11 +94,7 @@ def get_embedder():
 
 
 def embed_query(text: str) -> list[float]:
-    return (
-        get_embedder()
-        .encode(_QUERY_PREFIX + text, normalize_embeddings=True)
-        .tolist()
-    )
+    return get_embedder().encode(_QUERY_PREFIX + text, normalize_embeddings=True).tolist()
 
 
 def embed_documents(texts: list[str], batch_size: int = EMBED_BATCH_SIZE) -> list[list[float]]:

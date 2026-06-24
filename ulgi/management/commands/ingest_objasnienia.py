@@ -28,6 +28,4 @@ class Command(BaseCommand):
                 raise CommandError(f"Nieznany dokument: {kod}")
             self.stdout.write(f"Ingest {kod}...")
             out = ingest_objasnienie_to_stores(kod)
-            self.stdout.write(
-                self.style.SUCCESS(f"{kod}: ok={out['ok']}, błędy={out['errors']}")
-            )
+            self.stdout.write(self.style.SUCCESS(f"{kod}: ok={out['ok']}, błędy={out['errors']}"))

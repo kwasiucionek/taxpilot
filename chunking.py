@@ -103,7 +103,7 @@ def _split_ustepy(article_body: str) -> list[tuple[str, str]]:
     ustępów, zwraca [("", cała_treść_bez_nagłówka)].
     """
     m_art = _RE_ARTICLE.match(article_body)
-    rest = article_body[m_art.end():] if m_art else article_body
+    rest = article_body[m_art.end() :] if m_art else article_body
 
     matches = list(_RE_USTEP.finditer(rest))
     if len(matches) < 2:

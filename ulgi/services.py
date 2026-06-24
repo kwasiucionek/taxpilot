@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 def search_docs(query: str, **filters: Any) -> list[dict]:
@@ -17,7 +17,7 @@ def qualify(opis: str, **kwargs: Any) -> dict:
     return assess(opis, **kwargs)
 
 
-def answer(query: str, *, model: Optional[str] = None, **filters: Any) -> dict:
+def answer(query: str, *, model: str | None = None, **filters: Any) -> dict:
     """Odpowiedź RAG z semantycznym cache na Redisie.
 
     Zwraca {'answer', 'sources', 'cache'} — gdzie 'cache' to nazwa warstwy

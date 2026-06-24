@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from typing import Any
 
 import requests
 
@@ -55,7 +56,7 @@ def search_acts(
     sort_dir: str = "desc",
 ) -> list[dict]:
     """ELI /acts/search → lista ActInfo (dict z ELI, title, type, status...)."""
-    params: dict[str, object] = {"limit": limit, "sortBy": sort_by, "sortDir": sort_dir}
+    params: dict[str, Any] = {"limit": limit, "sortBy": sort_by, "sortDir": sort_dir}
     if keyword:
         params["keyword"] = keyword
     if title:
@@ -69,9 +70,7 @@ def search_acts(
     if year:
         params["year"] = year
 
-    r = requests.get(
-        f"{ELI_API_BASE}/acts/search", headers=_JSON, params=params, timeout=30
-    )
+    r = requests.get(f"{ELI_API_BASE}/acts/search", headers=_JSON, params=params, timeout=30)
     r.raise_for_status()
     data = r.json()
     return data.get("items", []) if isinstance(data, dict) else (data or [])
@@ -120,11 +119,16 @@ def _print_candidates(
     jednolite = [r for r in rows if r["category"] == "jednolity"]
     zmieniajace = [r for r in rows if r["category"] == "zmieniajacy"]
 
-    crit = " / ".join(filter(None, [f"keyword={keyword!r}" if keyword else "",
-                                    f"title={title!r}" if title else ""]))
-    print(f"Kryterium: {crit} → {len(rows)} aktów "
-          f"(bazowe {len(bazowe)}, teksty jednolite {len(jednolite)}, "
-          f"zmieniające {len(zmieniajace)})\n")
+    crit = " / ".join(
+        filter(
+            None, [f"keyword={keyword!r}" if keyword else "", f"title={title!r}" if title else ""]
+        )
+    )
+    print(
+        f"Kryterium: {crit} → {len(rows)} aktów "
+        f"(bazowe {len(bazowe)}, teksty jednolite {len(jednolite)}, "
+        f"zmieniające {len(zmieniajace)})\n"
+    )
 
     print("AKTY BAZOWE (główni kandydaci do ingestu):")
     for r in bazowe:
