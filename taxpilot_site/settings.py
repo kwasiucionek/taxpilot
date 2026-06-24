@@ -39,7 +39,9 @@ ALLOWED_HOSTS = [
     if h.strip()
 ]
 CSRF_TRUSTED_ORIGINS = [
-    o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+    o.strip()
+    for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if o.strip()
 ]
 
 # Za Cloudflare + nginx (TLS terminowany wyżej) Django musi rozpoznać HTTPS po
@@ -56,7 +58,9 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "0") == "1"
-    SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", str(60 * 60 * 24 * 30)))
+    SECURE_HSTS_SECONDS = int(
+        os.getenv("DJANGO_SECURE_HSTS_SECONDS", str(60 * 60 * 24 * 30))
+    )
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
@@ -182,7 +186,15 @@ LOGGING = {
         # Moduły aplikacji i rdzenia RAG.
         "ulgi": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
         "search": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
-        "qualification": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
-        "opensearch_schema": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "qualification": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "opensearch_schema": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
     },
 }
