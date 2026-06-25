@@ -21,11 +21,8 @@ from config import (
     DEFAULT_OLLAMA_MODEL,
     OLLAMA_CLOUD_API_KEY,
     OLLAMA_URL,
-    SOURCE_INTERPRETACJA,
-    SOURCE_OBJASNIENIA,
-    SOURCE_USTAWA,
 )
-from search import retrieve
+from search import retrieve_mixed
 
 logger = logging.getLogger(__name__)
 
@@ -78,21 +75,19 @@ def assess(
     opis: str,
     *,
     ulgi: list[str] | None = None,
-    k_per_ulga: int = 6,
     model: str | None = None,
     on_date: str | None = None,
 ) -> dict:
     """Ocena kwalifikacji. Zwraca {'ocena': {...}, 'sources': [...]}"""
     ulgi = ulgi or _DEFAULT_ULGI
-    source_types = [SOURCE_USTAWA, SOURCE_OBJASNIENIA, SOURCE_INTERPRETACJA]
 
-    # Retrieval per ulga — opis działalności jako zapytanie, filtr po uldze.
+    # Retrieval per ulga z kwotą per typ źródła (ustawa + objaśnienia + interpretacje);
+    # opis działalności jako zapytanie. Bez kwoty interpretacje (~75% indeksu)
+    # zdominowałyby wyniki i ocena stałaby tylko na interpretacjach, nie na ustawie.
     docs: list[dict] = []
     seen: set[str] = set()
     for code in ulgi:
-        for d in retrieve(
-            opis, k=k_per_ulga, ulga=code, source_types=source_types, on_date=on_date
-        ):
+        for d in retrieve_mixed(opis, ulga=code, on_date=on_date):
             key = d.get("citation") or d.get("content_text", "")[:60]
             if key not in seen:
                 seen.add(key)
