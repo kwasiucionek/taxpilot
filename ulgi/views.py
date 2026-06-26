@@ -94,7 +94,9 @@ def healthz(request):
 
 # ── Strona główna ─────────────────────────────────────────────────────────
 def chat(request):
-    ctx: dict[str, Any] = {"corpus_note": "korpus: ustawy CIT·PIT·ORD + objaśnienia MF + interpretacje KIS"}
+    ctx: dict[str, Any] = {
+        "corpus_note": "korpus: ustawy CIT·PIT·ORD + objaśnienia MF + interpretacje KIS"
+    }
     # Pieczęć „stan prawny" z ostatniego udanego ingestu (degraduje, gdy brak DB/danych).
     try:
         akt = (
