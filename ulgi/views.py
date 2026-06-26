@@ -94,7 +94,7 @@ def healthz(request):
 
 # ── Strona główna ─────────────────────────────────────────────────────────
 def chat(request):
-    ctx: dict[str, Any] = {"corpus_note": "korpus: CIT · PIT · ORD"}
+    ctx: dict[str, Any] = {"corpus_note": "korpus: ustawy CIT·PIT·ORD + objaśnienia MF + interpretacje KIS"}
     # Pieczęć „stan prawny" z ostatniego udanego ingestu (degraduje, gdy brak DB/danych).
     try:
         akt = (
@@ -179,7 +179,7 @@ def ask(request):
     skey = request.session.session_key
 
     def gen():
-        from search import retrieve
+        from search import retrieve_mixed
 
         from .cache import get_cache
 
@@ -204,9 +204,9 @@ def ask(request):
             _save_bot(sess, text, sources)
             return
 
-        # 2. Retrieval hybrydowy.
+        # 2. Retrieval hybrydowy z kwotą per typ źródła (ustawa + objaśnienia + interpretacje).
         try:
-            docs = retrieve(q, **filters)
+            docs = retrieve_mixed(q, ulga=ulga)
         except Exception as e:  # noqa: BLE001
             yield _sse("error", {"m": f"Wyszukiwarka niedostępna ({e})."})
             yield _sse("done", {})

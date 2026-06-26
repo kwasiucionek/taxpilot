@@ -152,4 +152,14 @@ PRZEPISY_BY_ULGA: dict[str, list[int]] = {
 
 # ── Wyszukiwanie ─────────────────────────────────────────────────
 TOP_K = 8
+
+# Kwota retrievalu per typ źródła dla retrieve_mixed (czat).
+# Ustawa = podstawa, objaśnienia + interpretacje = wykładnia. Bez tego
+# interpretacje (~75% indeksu) dominują globalne top-k i wypychają przepisy.
+# Wartości łatwo stroić (np. 2–5 każde).
+RETRIEVE_MIX = {
+    SOURCE_USTAWA: 4,
+    SOURCE_OBJASNIENIA: 3,
+    SOURCE_INTERPRETACJA: 4,
+}
 CHUNK_MAX_CHARS = 1200  # powyżej tej długości artykuł dzielony po ustępach

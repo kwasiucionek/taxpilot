@@ -62,6 +62,54 @@ def retrieve(
     return hits_to_docs(resp["hits"]["hits"])
 
 
+def retrieve_mixed(
+    query: str,
+    *,
+    per_source: dict[str, int] | None = None,
+    ulga: str | None = None,
+    on_date: str | None = None,
+    use_hybrid: bool = True,
+) -> list[dict]:
+    """Retrieval z kwotą per typ źródła.
+
+    Pobiera OSOBNO z ustaw, objaśnień i interpretacji (każde z własnym filtrem
+    source_type i własnym k z RETRIEVE_MIX), po czym scala w kolejności
+    ustawa → objaśnienia → interpretacja. Gwarantuje obecność przepisu w
+    źródłach — inaczej interpretacje (długa proza zbliżona do pytań, ~75%
+    indeksu) dominują globalne top-k i wypychają suche przepisy ustawy.
+    """
+    from config import (
+        RETRIEVE_MIX,
+        SOURCE_INTERPRETACJA,
+        SOURCE_OBJASNIENIA,
+        SOURCE_USTAWA,
+    )
+
+    plan = per_source or RETRIEVE_MIX
+    order = (SOURCE_USTAWA, SOURCE_OBJASNIENIA, SOURCE_INTERPRETACJA)
+
+    out: list[dict] = []
+    seen: set[str] = set()
+    for stype in order:
+        k = plan.get(stype, 0)
+        if k <= 0:
+            continue
+        for d in retrieve(
+            query,
+            k=k,
+            ulga=ulga,
+            source_types=[stype],
+            on_date=on_date,
+            use_hybrid=use_hybrid,
+        ):
+            key = d.get("citation") or d.get("content_text", "")[:80]
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(d)
+    return out
+
+
 # ─────────────────────────── GENERACJA ───────────────────────────
 
 _SYSTEM = (
