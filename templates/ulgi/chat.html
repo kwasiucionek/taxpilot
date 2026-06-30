@@ -44,13 +44,7 @@
       </button>
     </div>
   </div>
-  <div class="hint">Filtr ulgi:
-    <label><input type="radio" name="ulga" value="" checked> wszystkie</label>
-    <label><input type="radio" name="ulga" value="BR"> B+R</label>
-    <label><input type="radio" name="ulga" value="IPBOX"> IP&nbsp;Box</label>
-    <label><input type="radio" name="ulga" value="PKUP"> 50%&nbsp;KUP</label>
-    &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> wysyła
-  </div>
+  <div class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> wysyła</div>
 </section>
 
 <!-- ── TRYB: KWALIFIKACJA (HTMX) ── -->
@@ -60,11 +54,12 @@
     <div class="field">
       <label class="hint" for="opis" style="display:block;margin:14px 0 6px">Opisz działalność (czym zajmuje się zespół / na czym polega praca):</label>
       <textarea id="opis" name="opis" rows="5" required
-                placeholder="np. Zespół tworzy nowy silnik rekomendacji od podstaw — projektuje architekturę, prowadzi eksperymenty na modelach ML, dokumentuje wyniki…"></textarea>
+                placeholder="np. Zespół tworzy nowy silnik rekomendacji od podstaw — projektuje architekturę, prowadzi eksperymenty na modelach ML, dokumentuje wyniki. Dla 50% KUP dopisz, jak rozliczane jest wynagrodzenie autorskie (czy honorarium jest kwotowo wyodrębnione, czy przenoszone są prawa autorskie)…"></textarea>
     </div>
     <div class="hint" style="margin-top:10px">Rozpatrz ulgi:
       <label><input type="checkbox" name="ulgi" value="BR" checked> B+R</label>
       <label><input type="checkbox" name="ulgi" value="IPBOX" checked> IP&nbsp;Box</label>
+      <label><input type="checkbox" name="ulgi" value="PKUP" checked> 50%&nbsp;KUP</label>
     </div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
       <button class="btn" id="qual-btn" type="submit">Oceń kwalifikację</button>

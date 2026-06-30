@@ -138,7 +138,6 @@ const TaxPilot = (() => {
     const ta = $("q");
     const q = ta.value.trim();
     if (!q) return;
-    const ulga = (document.querySelector("input[name=ulga]:checked") || {}).value || "";
 
     busy = true;
     $("ask-btn").disabled = true;
@@ -185,7 +184,7 @@ const TaxPilot = (() => {
       const res = await fetch(window.TAXPILOT_ASK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", "X-CSRFToken": csrf },
-        body: new URLSearchParams({ q, ulga }),
+        body: new URLSearchParams({ q }),
       });
       if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
       const reader = res.body.getReader();
@@ -214,11 +213,6 @@ const TaxPilot = (() => {
     const q = btn.querySelector(".q");
     if (!q) return;
     $("q").value = q.textContent.trim();
-    const u = btn.getAttribute("data-ulga");
-    if (u !== null) {
-      const r = document.querySelector('input[name=ulga][value="' + u + '"]');
-      if (r) r.checked = true;
-    }
     ask();
   }
 

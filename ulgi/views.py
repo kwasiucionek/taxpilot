@@ -171,9 +171,11 @@ def _save_bot(sess, text: str, sources: list[dict]) -> None:
 @require_POST
 def ask(request):
     q = (request.POST.get("q") or "").strip()
-    ulga = (request.POST.get("ulga") or "").strip() or None
     if not q:
         return HttpResponseBadRequest("puste pytanie")
+    from search import detect_ulga
+
+    ulga = detect_ulga(q)  # automatyczne zawężenie do ulgi, gdy pytanie jednoznaczne
     filters: dict[str, Any] = {"ulga": ulga} if ulga else {}
 
     if not request.session.session_key:

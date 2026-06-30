@@ -62,6 +62,59 @@ def retrieve(
     return hits_to_docs(resp["hits"]["hits"])
 
 
+# Słowa-klucze do automatycznego rozpoznania ulgi z treści pytania. Zawężamy
+# retrieval tylko, gdy pytanie jednoznacznie dotyczy JEDNEJ ulgi; przy zerowym
+# lub wielokrotnym trafieniu zostawiamy pełny zakres (bezpieczny domyślny).
+_ULGA_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "BR": (
+        "b+r",
+        "badawczo-rozwojow",
+        "badawczo rozwojow",
+        "prace rozwojowe",
+        "działalność badawcz",
+        "koszty kwalifikowane",
+        "18d",
+        "26e",
+    ),
+    "IPBOX": (
+        "ip box",
+        "ipbox",
+        "ip-box",
+        "nexus",
+        "kwalifikowane prawo własności intelektualnej",
+        "kwalifikowane ip",
+        "preferencyjna stawka",
+        "5% stawk",
+        "stawka 5%",
+        "24d",
+        "30ca",
+    ),
+    "PKUP": (
+        "50% koszt",
+        "50 % koszt",
+        "koszty autorskie",
+        "honorarium autorskie",
+        "honorarium",
+        "50% kup",
+        "22 ust. 9",
+        "twórc",
+    ),
+}
+
+
+def detect_ulga(query: str) -> str | None:
+    """Heurystyczne rozpoznanie ulgi z treści pytania.
+
+    Zwraca kod ulgi tylko, gdy pytanie pasuje DOKŁADNIE do jednej (np. „ulga
+    B+R"); przy braku trafień lub trafieniu wielu ulg zwraca None → retrieval
+    bez zawężenia. Dzięki temu pytanie o B+R nie wciąga przepisów IP Box do
+    kontekstu, a pytanie międzyulgowe nadal widzi całość.
+    """
+    q = query.lower()
+    matched = [u for u, kws in _ULGA_KEYWORDS.items() if any(k in q for k in kws)]
+    return matched[0] if len(matched) == 1 else None
+
+
 def retrieve_mixed(
     query: str,
     *,

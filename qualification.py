@@ -28,17 +28,23 @@ logger = logging.getLogger(__name__)
 
 # Ulgi rozpatrywane przy ocenie działalności (PKUP zostawiamy poza zakresem
 # asystenta — dotyczy formy wynagrodzenia, nie charakteru prac).
-_DEFAULT_ULGI = ["BR", "IPBOX"]
+_DEFAULT_ULGI = ["BR", "IPBOX", "PKUP"]
 
 _SYSTEM = (
     "Jesteś asystentem prawno-podatkowym wspierającym doradcę w ocenie, czy "
-    "opisana działalność kwalifikuje się do ulgi B+R lub IP Box. Oceniaj "
-    "WYŁĄCZNIE na podstawie dostarczonego kontekstu (przepisy, objaśnienia, "
-    "interpretacje). Dla każdej ulgi wskaż podstawę prawną z kontekstu "
-    "(np. art. 18d ustawy o CIT, objaśnienia MF, sygnatura interpretacji). "
-    "Jeśli z opisu nie wynika spełnienie przesłanki (np. systematyczność, "
-    "twórczy charakter, zwiększanie zasobów wiedzy) — napisz, czego brakuje, "
-    "zamiast zgadywać. To wsparcie informacyjne, nie wiążąca porada podatkowa."
+    "opisana sytuacja kwalifikuje się do ulgi B+R, IP Box lub 50% kosztów "
+    "autorskich (50% KUP). Oceniaj WYŁĄCZNIE na podstawie dostarczonego "
+    "kontekstu (przepisy, objaśnienia, interpretacje). Dla każdej ulgi wskaż "
+    "podstawę prawną z kontekstu (np. art. 18d ustawy o CIT, art. 22 ust. 9 "
+    "pkt 3 ustawy o PIT, objaśnienia MF, sygnatura interpretacji). Przesłanki, "
+    "na które zwracaj uwagę: dla B+R — systematyczność, twórczy charakter, "
+    "zwiększanie zasobów wiedzy; dla IP Box — kwalifikowane prawo własności "
+    "intelektualnej i wskaźnik nexus; dla 50% KUP — powstanie utworu w "
+    "rozumieniu prawa autorskiego, przeniesienie praw, kwotowe wyodrębnienie "
+    "honorarium autorskiego (nie procent czasu pracy), ewidencja utworów oraz "
+    "mieszczenie się w katalogu z art. 22 ust. 9b ustawy o PIT. Jeśli z opisu "
+    "nie wynika spełnienie przesłanki — napisz, czego brakuje, zamiast zgadywać. "
+    "To wsparcie informacyjne, nie wiążąca porada podatkowa."
 )
 
 # Model proszony o zwięzły JSON — łatwy do wyrenderowania w UI.
@@ -47,10 +53,10 @@ _FORMAT = (
     "{\n"
     '  "oceny": [\n'
     "    {\n"
-    '      "ulga": "B+R" | "IP Box",\n'
+    '      "ulga": "B+R" | "IP Box" | "50% KUP",\n'
     '      "werdykt": "kwalifikuje" | "częściowo" | "nie kwalifikuje" | "za mało danych",\n'
     '      "uzasadnienie": "2-4 zdania",\n'
-    '      "podstawa_prawna": ["art. 18d ust. 1 ustawy o CIT", "..."],\n'
+    '      "podstawa_prawna": ["art. 18d ust. 1 ustawy o CIT", "art. 22 ust. 9 pkt 3 ustawy o PIT", "..."],\n'
     '      "czego_brakuje": ["pytanie lub brakująca przesłanka", "..."]\n'
     "    }\n"
     "  ],\n"
