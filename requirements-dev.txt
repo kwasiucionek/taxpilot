@@ -8,3 +8,8 @@ pytest-django>=4.8
 mypy>=1.11
 django-stubs[compatible-mypy]>=5.0
 types-requests>=2.31
+
+# Narzędzia deweloperskie (wpinane tylko przy DEBUG w settings.py)
+django-debug-toolbar>=4.4
+django-extensions>=3.2
+Werkzeug>=3.0        # wymagane przez runserver_plus (interaktywny debugger)
