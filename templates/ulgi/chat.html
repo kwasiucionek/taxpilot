@@ -49,17 +49,113 @@
 
 <!-- ── TRYB: KWALIFIKACJA (HTMX) ── -->
 <section id="panel-qual" class="panel" role="tabpanel">
+  <style>
+    #panel-qual .q-forma{display:flex;align-items:center;gap:10px;margin-top:12px}
+    #panel-qual .q-forma select{padding:4px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.4);background:inherit;color:inherit}
+    #panel-qual .q-ulga{border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:10px 12px;margin-top:10px}
+    #panel-qual .q-head{font-weight:600;display:block}
+    #panel-qual .q-ulga:not(:has(.q-head input:checked)) .q-fields{display:none}
+    #panel-qual .q-fields{margin-top:8px}
+    #panel-qual .q-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:4px 0;flex-wrap:wrap;font-size:.92em}
+    #panel-qual .q-opts{display:flex;gap:12px;white-space:nowrap}
+    #panel-qual .q-opts label{opacity:.85}
+  </style>
   <form hx-post="{% url 'ulgi:qualify' %}" hx-target="#assess-result" hx-swap="innerHTML"
         hx-indicator="#qual-ind" hx-disabled-elt="#qual-btn">
     <div class="field">
       <label class="hint" for="opis" style="display:block;margin:14px 0 6px">Opisz działalność (czym zajmuje się zespół / na czym polega praca):</label>
       <textarea id="opis" name="opis" rows="5" required
-                placeholder="np. Zespół tworzy nowy silnik rekomendacji od podstaw — projektuje architekturę, prowadzi eksperymenty na modelach ML, dokumentuje wyniki. Dla 50% KUP dopisz, jak rozliczane jest wynagrodzenie autorskie (czy honorarium jest kwotowo wyodrębnione, czy przenoszone są prawa autorskie)…"></textarea>
+                placeholder="np. Zespół tworzy nowy silnik rekomendacji od podstaw — projektuje architekturę, prowadzi eksperymenty na modelach ML, dokumentuje wyniki…"></textarea>
     </div>
-    <div class="hint" style="margin-top:10px">Rozpatrz ulgi:
-      <label><input type="checkbox" name="ulgi" value="BR" checked> B+R</label>
-      <label><input type="checkbox" name="ulgi" value="IPBOX" checked> IP&nbsp;Box</label>
-      <label><input type="checkbox" name="ulgi" value="PKUP" checked> 50%&nbsp;KUP</label>
+
+    <div class="q-forma hint">
+      <label for="ank_forma">Forma współpracy:</label>
+      <select id="ank_forma" name="ank_forma">
+        <option value="">— wybierz (opcjonalnie) —</option>
+        <option value="b2b">działalność gospodarcza (B2B)</option>
+        <option value="uop">umowa o pracę</option>
+        <option value="cyw">umowa zlecenie / o dzieło</option>
+      </select>
+    </div>
+
+    <div class="hint" style="margin-top:12px">Rozpatrz ulgi — dla zaznaczonych odpowiedz na pytania o przesłanki („nie wiem" jest w porządku, model wskaże to jako brakującą informację):</div>
+
+    <div class="q-ulga">
+      <label class="q-head"><input type="checkbox" name="ulgi" value="BR" checked> Ulga B+R</label>
+      <div class="q-fields">
+        <div class="q-row"><span>Prace prowadzone są systematycznie (plan, harmonogram, projekty)?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_br_syst" value="tak"> tak</label>
+            <label><input type="radio" name="ank_br_syst" value="nie"> nie</label>
+            <label><input type="radio" name="ank_br_syst" value="niewiem"> nie wiem</label>
+          </span></div>
+        <div class="q-row"><span>Rezultaty mają twórczy charakter (nowe rozwiązania, nie rutyna)?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_br_tworcze" value="tak"> tak</label>
+            <label><input type="radio" name="ank_br_tworcze" value="nie"> nie</label>
+            <label><input type="radio" name="ank_br_tworcze" value="niewiem"> nie wiem</label>
+          </span></div>
+        <div class="q-row"><span>Prowadzona jest ewidencja czasu/kosztów prac B+R?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_br_ewid" value="tak"> tak</label>
+            <label><input type="radio" name="ank_br_ewid" value="nie"> nie</label>
+            <label><input type="radio" name="ank_br_ewid" value="niewiem"> nie wiem</label>
+          </span></div>
+      </div>
+    </div>
+
+    <div class="q-ulga">
+      <label class="q-head"><input type="checkbox" name="ulgi" value="IPBOX" checked> IP&nbsp;Box</label>
+      <div class="q-fields">
+        <div class="q-row"><span>Powstaje kwalifikowane IP (np. autorskie prawo do programu komputerowego)?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_ip_kip" value="tak"> tak</label>
+            <label><input type="radio" name="ank_ip_kip" value="nie"> nie</label>
+            <label><input type="radio" name="ank_ip_kip" value="niewiem"> nie wiem</label>
+          </span></div>
+        <div class="q-row"><span>IP jest wytwarzane/rozwijane w ramach własnej działalności B+R?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_ip_zbr" value="tak"> tak</label>
+            <label><input type="radio" name="ank_ip_zbr" value="nie"> nie</label>
+            <label><input type="radio" name="ank_ip_zbr" value="niewiem"> nie wiem</label>
+          </span></div>
+        <div class="q-row"><span>Prowadzona jest odrębna ewidencja dochodów z IP (wskaźnik nexus)?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_ip_ewid" value="tak"> tak</label>
+            <label><input type="radio" name="ank_ip_ewid" value="nie"> nie</label>
+            <label><input type="radio" name="ank_ip_ewid" value="niewiem"> nie wiem</label>
+          </span></div>
+      </div>
+    </div>
+
+    <div class="q-ulga">
+      <label class="q-head"><input type="checkbox" name="ulgi" value="PKUP" checked> Koszty autorskie (50%&nbsp;KUP)</label>
+      <div class="q-fields">
+        <div class="q-row"><span>Efektem pracy są utwory w rozumieniu prawa autorskiego?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_kup_utwor" value="tak"> tak</label>
+            <label><input type="radio" name="ank_kup_utwor" value="nie"> nie</label>
+            <label><input type="radio" name="ank_kup_utwor" value="niewiem"> nie wiem</label>
+          </span></div>
+        <div class="q-row"><span>Prawa autorskie są przenoszone na pracodawcę/zamawiającego?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_kup_prawa" value="tak"> tak</label>
+            <label><input type="radio" name="ank_kup_prawa" value="nie"> nie</label>
+            <label><input type="radio" name="ank_kup_prawa" value="niewiem"> nie wiem</label>
+          </span></div>
+        <div class="q-row"><span>Honorarium autorskie jest kwotowo wyodrębnione w umowie?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_kup_hon" value="tak"> tak</label>
+            <label><input type="radio" name="ank_kup_hon" value="nie"> nie</label>
+            <label><input type="radio" name="ank_kup_hon" value="niewiem"> nie wiem</label>
+          </span></div>
+        <div class="q-row"><span>Prowadzona jest ewidencja utworów?</span>
+          <span class="q-opts">
+            <label><input type="radio" name="ank_kup_ewid" value="tak"> tak</label>
+            <label><input type="radio" name="ank_kup_ewid" value="nie"> nie</label>
+            <label><input type="radio" name="ank_kup_ewid" value="niewiem"> nie wiem</label>
+          </span></div>
+      </div>
     </div>
     <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
       <button class="btn" id="qual-btn" type="submit">Oceń kwalifikację</button>

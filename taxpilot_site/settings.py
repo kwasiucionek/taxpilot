@@ -197,15 +197,21 @@ LOGGING = {
 
 
 # ── Narzędzia deweloperskie (wyłącznie przy DEBUG; zero wpływu na produkcję) ──
+# Wpinane tylko, gdy pakiet jest zainstalowany (requirements-dev.txt) — dzięki
+# temu samo DJANGO_DEBUG=1 na maszynie bez zależności dev niczego nie psuje.
 if DEBUG:
-    INSTALLED_APPS += ["debug_toolbar", "django_extensions"]
-    # Middleware toolbara jak najwyżej (brak GZip, więc na początku listy).
-    MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
-    INTERNAL_IPS = ["127.0.0.1"]
-    # HTMX (kwalifikacja idzie przez hx-post): aktualizuj panele na żądaniach
-    # AJAX/HTMX i nie usuwaj paska przy podmianach hx-boost.
-    # Patrz docs: „Working with HTMX and Turbo".
-    DEBUG_TOOLBAR_CONFIG = {
-        "UPDATE_ON_FETCH": True,
-        "ROOT_TAG_EXTRA_ATTRS": "hx-preserve",
-    }
+    from importlib.util import find_spec
+
+    if find_spec("django_extensions"):
+        INSTALLED_APPS += ["django_extensions"]
+    if find_spec("debug_toolbar"):
+        INSTALLED_APPS += ["debug_toolbar"]
+        # Middleware toolbara jak najwyżej (brak GZip, więc na początku listy).
+        MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
+        INTERNAL_IPS = ["127.0.0.1"]
+        # HTMX (kwalifikacja idzie przez hx-post): aktualizuj panele na żądaniach
+        # AJAX/HTMX i nie usuwaj paska przy podmianach hx-boost.
+        DEBUG_TOOLBAR_CONFIG = {
+            "UPDATE_ON_FETCH": True,
+            "ROOT_TAG_EXTRA_ATTRS": "hx-preserve",
+        }

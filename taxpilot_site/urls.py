@@ -7,5 +7,5 @@ urlpatterns = [
     path("", include("ulgi.urls")),
 ]
 
-if settings.DEBUG:
+if settings.DEBUG and "debug_toolbar" in settings.INSTALLED_APPS:
     urlpatterns += [path("__debug__/", include("debug_toolbar.urls"))]

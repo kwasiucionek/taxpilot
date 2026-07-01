@@ -26,7 +26,9 @@ Korpus **ustaw aktualizuje się sam**: resolver ELI pobiera najnowszy tekst
 jednolity i wykrywa nowelizacje uchwalone po jego publikacji (ostrzeżenie o
 stanie prawnym). Objaśnienia MF i interpretacje KIS dochodzą jako pseudo-akty,
 bez zmiany schematu. Zadanie `refresh_corpus` (Celery Beat lub timer systemd)
-robi to cyklicznie.
+robi to cyklicznie — orkiestrator rozsyła osobne zadania per akt (izolacja
+błędów), a ingest jest inkrementalny: liczy embeddingi tylko dla chunków,
+których treść realnie się zmieniła (hash SHA-256).
 
 Rdzeń RAG jest frameworkowo-niezależny; Django go owija. Dostępne też
 szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
@@ -44,8 +46,8 @@ szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
 | `chunking.py` | podział aktu na jednostki redakcyjne (artykuł/ustęp) + chunkowanie prozy (objaśnienia/interpretacje), twardy podział długich fragmentów |
 | `opensearch_schema.py` | mapping (Stempel/morfologik + kNN + daty), pipeline hybrydy RRF, zapytania |
 | `embedder.py` | stella-pl-mini (GPU/CPU, atencja PyTorch zamiast xformers), embed query/dokument |
-| `search.py` | hybryda z filtrami (ulga, akt, stan prawny) + generacja |
-| `qualification.py` | asystent kwalifikacji (B+R / IP Box) |
+| `search.py` | hybryda z filtrami (ulga, akt, stan prawny), `retrieve_mixed` (kwota per typ źródła), `detect_ulga` (auto-zawężenie z treści pytania) + generacja |
+| `qualification.py` | asystent kwalifikacji (B+R / IP Box / 50% KUP) |
 | `ingest.py` | core CLI ingestu (tylko OpenSearch) |
 | `api.py` | opcjonalne API FastAPI |
 
@@ -61,7 +63,7 @@ szybkie demo w Streamlit (`app.py`) oraz opcjonalne programistyczne API
 | `ulgi/ingest_core.py` | ingest aktów ELI + `refresh_corpus` (odświeżanie całości) |
 | `ulgi/ingest_docs.py` | ingest objaśnień MF i interpretacji KIS (pseudo-akty) |
 | `ulgi/kis_client.py` | klient publicznego API EUREKA (wyszukiwanie + pobieranie interpretacji) |
-| `ulgi/tasks.py` | zadania Celery: `ingest_act_task`, `refresh_corpus_task` |
+| `ulgi/tasks.py` | zadania Celery: `ingest_act_task`, `ingest_interpretacje_task`, `refresh_corpus_task` (orkiestrator per akt) |
 | `ulgi/management/commands/ingest_acts.py` | ingest ustaw (ELI) |
 | `ulgi/management/commands/ingest_objasnienia.py` | ingest objaśnień MF (PDF) |
 | `ulgi/management/commands/ingest_interpretacje.py` | ingest interpretacji KIS (EUREKA) |
@@ -129,7 +131,7 @@ Health-check (liveness + readiness bazy) dla nginx/systemd/monitoringu:
 Lint, format i testy konfiguruje `pyproject.toml`. Zależności deweloperskie:
 
 ```bash
-pip install -r requirements-dev.txt   # ruff + pytest(-django) + mypy + django-stubs
+pip install -r requirements-dev.txt   # ruff + pytest(-django) + mypy + django-stubs + narzędzia dev
 
 ruff check .            # lint
 ruff format --check .    # weryfikacja formatu (bez `--check` formatuje)
@@ -141,10 +143,17 @@ pytest                   # testy jednostkowe (czysta logika, bez sieci/DB)
 więc ładuje `settings` przy starcie — potrzebuje `DJANGO_DEBUG=1` i
 `DJANGO_SECRET_KEY` w `.env` (lub ENV). CI ustawia te zmienne samo.
 
+Przy `DJANGO_DEBUG=1` — i tylko gdy pakiety dev są zainstalowane — wpinają
+się automatycznie: django-debug-toolbar (panel SQL/czasów, skonfigurowany
+pod HTMX/kwalifikację) oraz django-extensions (`shell_plus`,
+`runserver_plus`; ten drugi wymaga Werkzeug). Na produkcji (`DEBUG=0`) nic
+z tego się nie ładuje.
+
 Testy (`tests/`) pokrywają logikę niezależną od usług zewnętrznych: klucze
 semantycznego cache, budowanie filtrów/zapytań OpenSearch, chunking aktów,
-helpery widoków i budowanie promptu. CI (`.github/workflows/ci.yml`) uruchamia
-lint + format + testy na każdym push/PR.
+logikę retrievalu (kwoty per typ źródła w `retrieve_mixed`, auto-detekcja
+ulgi), helpery widoków i budowanie promptu. CI (`.github/workflows/ci.yml`)
+uruchamia lint + format + mypy + testy na każdym push/PR.
 
 ### Cykliczne odświeżanie korpusu
 
@@ -160,6 +169,12 @@ celery -A taxpilot_site beat   -l info
 python manage.py refresh_corpus                 # same akty
 python manage.py refresh_corpus --interpretacje # + najnowsze interpretacje KIS
 ```
+
+W wariancie Celery `refresh_corpus_task` to orkiestrator: rozsyła osobne
+zadania per akt i per ulgę (limit czasu per zadanie: soft 1 h 45 / hard 2 h),
+więc timeout jednego aktu nie przewraca pozostałych. Dzięki inkrementalnemu
+ingestowi akt bez zmian kończy się w sekundy (`policzono=0`); pełne
+przeliczenie wymusza `--force` (np. po zmianie modelu embeddera).
 
 Worker Celery przydaje się też do ingestu on-demand (`ingest_act_task.delay()`)
 i automatycznych retry — patrz `deploy/` po jednostki systemd.
@@ -191,8 +206,10 @@ OpenSearcha/Postgresa tunelem SSH — pełny ingest schodzi wtedy z godzin (CPU 
 VPS) do minut. To wybór **szybkości**, nie konieczność RAM-owa: przy hoście z
 ~16 GB always-on worker Celery (druga kopia embeddera, ~1,5–2 GB) mieści się
 spokojnie. Na maszynach ≥ 4 GB prościej puszczać `manage.py ingest_*` / timer
-zamiast trzymać worker. Ingest jest idempotentny (`_id = doc_id`), więc można go
-bezpiecznie ponawiać.
+zamiast trzymać worker. Ingest jest idempotentny (`_id = doc_id`) i
+inkrementalny (hash treści chunku — ponowny przebieg bez zmian nie liczy
+żadnych embeddingów), więc można go bezpiecznie ponawiać; `--force` wymusza
+pełne przeliczenie.
 
 ## Wdrożenie
 
@@ -212,3 +229,5 @@ Patrz `deploy/README-mikrus.md` — pełny stack na Mikrusie
 - [x] Hybryda BM25 + kNN (pipeline RRF), semantyczny cache na Redisie, fragmenty źródeł z bazy.
 - [x] Cykliczne odświeżanie korpusu: zadanie `refresh_corpus` (Celery Beat) + wariant timer systemd.
 - [x] Fundament jakości: `ruff` (lint+format), `mypy` + `django-stubs`, testy `pytest`, CI (GitHub Actions), hardening produkcyjny `settings.py`, endpoint `/healthz`.
+- [x] Retrieval z kwotą per typ źródła (`retrieve_mixed`) i automatyczną detekcją ulgi z pytania (`detect_ulga`); kwalifikacja rozszerzona o 50% KUP.
+- [x] Inkrementalny ingest po hashu treści (embedding tylko zmian, `--force`) + odświeżanie rozbite na zadania per akt (orkiestrator, limity czasu na zadanie).

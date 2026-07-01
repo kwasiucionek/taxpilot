@@ -6,7 +6,7 @@ linkami do oficjalnego tekstu na eli.gov.pl. Cache semantyczny (Redis) na wejśc
 trafienie zwraca odpowiedź natychmiast.
 
 Tryb „Kwalifikacja" — HTMX: opis działalności → qualification.assess() → karty
-werdyktów (B+R / IP Box) z podstawą prawną i listą braków.
+werdyktów (B+R / IP Box / 50% KUP) z podstawą prawną i listą braków.
 """
 
 from __future__ import annotations
@@ -36,6 +36,57 @@ VERDICT_CLS = {
     "nie kwalifikuje": "nie",
     "za mało danych": "brak",
 }
+
+# ── Ankieta kwalifikacji ──────────────────────────────────────────────────
+# Ustrukturyzowane pytania o przesłanki (radio tak/nie/nie wiem) — wolny opis
+# rzadko je adresuje, przez co model odpowiadał „za mało danych". Odpowiedzi
+# doklejane są do opisu jako sekcja „Ankieta (deklaracje)": zasilają zarówno
+# prompt oceny, jak i retrieval (terminy typu „honorarium", „ewidencja").
+ANKIETA_FORMA = {
+    "b2b": "działalność gospodarcza (B2B)",
+    "uop": "umowa o pracę",
+    "cyw": "umowa zlecenie / o dzieło",
+}
+ANKIETA_PYTANIA: dict[str, list[tuple[str, str]]] = {
+    "BR": [
+        ("ank_br_syst", "Prace prowadzone są systematycznie (plan, harmonogram, projekty)"),
+        ("ank_br_tworcze", "Rezultaty mają twórczy charakter (nowe rozwiązania, nie rutyna)"),
+        ("ank_br_ewid", "Prowadzona jest ewidencja czasu/kosztów prac B+R"),
+    ],
+    "IPBOX": [
+        ("ank_ip_kip", "Powstaje kwalifikowane IP (np. autorskie prawo do programu komputerowego)"),
+        ("ank_ip_zbr", "IP jest wytwarzane/rozwijane w ramach własnej działalności B+R"),
+        ("ank_ip_ewid", "Prowadzona jest odrębna ewidencja dochodów z IP (wskaźnik nexus)"),
+    ],
+    "PKUP": [
+        ("ank_kup_utwor", "Efektem pracy są utwory w rozumieniu prawa autorskiego"),
+        ("ank_kup_prawa", "Prawa autorskie są przenoszone na pracodawcę/zamawiającego"),
+        ("ank_kup_hon", "Honorarium autorskie jest kwotowo wyodrębnione w umowie"),
+        ("ank_kup_ewid", "Prowadzona jest ewidencja utworów"),
+    ],
+}
+_ANKIETA_ODP = {"tak": "tak", "nie": "nie", "niewiem": "nie wiem"}
+
+
+def _ankieta_text(post, ulgi: list[str]) -> str:
+    """Składa sekcję „Ankieta (deklaracje)" z odpowiedzi formularza.
+
+    Uwzględnia tylko pytania ulg wskazanych w `ulgi` (radio ukrytej sekcji też
+    trafia do POST) i tylko udzielone odpowiedzi — brak odpowiedzi = brak
+    deklaracji (model potraktuje jak brak danych). Zwraca "" gdy pusto.
+    """
+    lines: list[str] = []
+    forma = ANKIETA_FORMA.get(post.get("ank_forma", ""))
+    if forma:
+        lines.append(f"- Forma współpracy: {forma}")
+    for code in ulgi:
+        for name, label in ANKIETA_PYTANIA.get(code, []):
+            odp = _ANKIETA_ODP.get(post.get(name, ""))
+            if odp:
+                lines.append(f"- [{ULGA_LABELS.get(code, code)}] {label}: {odp}")
+    return "\n".join(lines)
+
+
 # Sufiksy cytatów (do rozbicia „art. 18d ust. 2 | ustawy o CIT").
 _SUFFIXES = sorted({a["citation_suffix"] for a in ACTS.values()}, key=len, reverse=True)
 
@@ -254,6 +305,12 @@ def qualify(request):
     ulgi = request.POST.getlist("ulgi") or None
     if not opis:
         return render(request, "ulgi/_qualification.html", {"error": "Podaj opis działalności."})
+
+    # Ankieta przesłanek (tak/nie/nie wiem) dokleja się do opisu — trafia i do
+    # retrievalu, i do promptu oceny. Zapisujemy pełny tekst (audyt).
+    ankieta = _ankieta_text(request.POST, ulgi or list(ANKIETA_PYTANIA))
+    if ankieta:
+        opis = f"{opis}\n\nAnkieta (deklaracje):\n{ankieta}"
 
     try:
         out = services.qualify(opis, ulgi=ulgi)

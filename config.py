@@ -129,9 +129,23 @@ OBJASNIENIA: dict[str, dict] = {
         "citation": "Interpretacja ogólna MF z 15.09.2020 (50% KUP)",
         "url": "https://www.mf.gov.pl/documents/764034/6831363/Dz.+Urz.+Min.+Fin.+z+dnia+18+wrze%C5%9Bnia+2020+r.+-+poz.+107+-",
     },
-    # B+R: MF nie wydało dedykowanych objaśnień ulgi B+R — kryteria działalności
-    # B+R (twórczość, systematyczność, zwiększanie zasobów wiedzy) są szczegółowo
-    # omówione w objaśnieniach IP Box powyżej, więc temat jest już pokryty.
+    # B+R: MF nie wydało objaśnień podatkowych stricte dla ulgi B+R (kryteria
+    # działalności B+R — twórczość, systematyczność, zwiększanie zasobów wiedzy —
+    # omawiają szczegółowo objaśnienia IP Box powyżej). Istnieje natomiast
+    # interpretacja ogólna z 13.02.2024 (DD8.8203.1.2021, Dz. Urz. MF poz. 16)
+    # o kosztach pracowniczych B+R za czas usprawiedliwionej nieobecności —
+    # pierwsza interpretacja ogólna dot. ulgi B+R. Aby ją dodać: na stronie
+    # gov.pl/web/finanse znajdź wpis "DD8.8203.1.2021", skopiuj adres załącznika
+    # PDF "20240221_Dz_Urz_Min_Fin_2024_poz_16.pdf" (postać
+    # https://www.gov.pl/attachment/<uuid>), wklej niżej i odkomentuj wpis:
+    #   python manage.py ingest_objasnienia --kod OBJ-BR-2024
+    "OBJ-BR-2024": {
+        "title": "Interpretacja ogólna MF z 13.02.2024 — ulga B+R (koszty pracownicze)",
+        "data": "2024-02-13",
+        "ulga": "BR",
+        "citation": "Interpretacja ogólna MF z 13.02.2024 (B+R)",
+        "url": "https://www.gov.pl/attachment/179a35a8-7a54-4c6c-85a2-9cf40ee069f6",
+    },
 }
 
 # ── EUREKA / KIS — wyszukiwanie interpretacji indywidualnych ─────

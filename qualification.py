@@ -42,7 +42,11 @@ _SYSTEM = (
     "intelektualnej i wskaźnik nexus; dla 50% KUP — powstanie utworu w "
     "rozumieniu prawa autorskiego, przeniesienie praw, kwotowe wyodrębnienie "
     "honorarium autorskiego (nie procent czasu pracy), ewidencja utworów oraz "
-    "mieszczenie się w katalogu z art. 22 ust. 9b ustawy o PIT. Jeśli z opisu "
+    "mieszczenie się w katalogu z art. 22 ust. 9b ustawy o PIT. Opis może "
+    "zawierać sekcję „Ankieta (deklaracje)” z odpowiedziami tak / nie / "
+    "nie wiem na pytania o przesłanki — deklaracje przyjmuj jako opis stanu "
+    "faktycznego, a „nie wiem” i brak odpowiedzi traktuj jak brak danych i "
+    "wymień w polu czego_brakuje. Jeśli z opisu "
     "nie wynika spełnienie przesłanki — napisz, czego brakuje, zamiast zgadywać. "
     "To wsparcie informacyjne, nie wiążąca porada podatkowa."
 )

@@ -55,3 +55,40 @@ def test_sse_formats_event_and_json_payload():
     assert out.endswith("\n\n")
     data_line = out.split("data: ", 1)[1].strip()
     assert json.loads(data_line) == {"t": "ąćź"}
+
+
+# ── Ankieta kwalifikacji ──────────────────────────────────────────────────
+
+
+def test_ankieta_text_sklada_tylko_udzielone_odpowiedzi():
+    from ulgi.views import _ankieta_text
+
+    post = {
+        "ank_forma": "uop",
+        "ank_br_syst": "tak",
+        "ank_br_ewid": "niewiem",
+        # ank_br_tworcze — brak odpowiedzi → pomijane
+    }
+    out = _ankieta_text(post, ["BR"])
+    assert "- Forma współpracy: umowa o pracę" in out
+    assert "systematycznie" in out and ": tak" in out
+    assert "ewidencja czasu/kosztów prac B+R: nie wiem" in out
+    assert "twórczy charakter" not in out
+
+
+def test_ankieta_text_filtruje_po_wybranych_ulgach():
+    from ulgi.views import _ankieta_text
+
+    # Odpowiedź PKUP w POST (ukryta sekcja też submituje), ale ulga niewybrana.
+    post = {"ank_kup_hon": "tak", "ank_ip_kip": "tak"}
+    out = _ankieta_text(post, ["IPBOX"])
+    assert "kwalifikowane IP" in out
+    assert "Honorarium" not in out
+
+
+def test_ankieta_text_pusta_gdy_brak_deklaracji():
+    from ulgi.views import _ankieta_text
+
+    assert _ankieta_text({}, ["BR", "IPBOX", "PKUP"]) == ""
+    # Nieznana wartość (spoza tak/nie/niewiem) też nie wchodzi do ankiety.
+    assert _ankieta_text({"ank_br_syst": "moze"}, ["BR"]) == ""
