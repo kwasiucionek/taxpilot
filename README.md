@@ -1,5 +1,7 @@
 # TaxPilot — asystent ulg podatkowych (RAG)
 
+**Demo:** taxpilot.cytr.us
+
 RAG nad polskim prawem podatkowym, ukierunkowany na trzy ulgi:
 
 - **Ulga B+R** — art. 18d CIT / 26e PIT
