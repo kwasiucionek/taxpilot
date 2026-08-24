@@ -1,6 +1,6 @@
 # TaxPilot — asystent ulg podatkowych (RAG)
 
-**Demo:** taxpilot.cytr.us
+**Demo:** https://taxpilot.cytr.us
 
 RAG nad polskim prawem podatkowym, ukierunkowany na trzy ulgi:
 
